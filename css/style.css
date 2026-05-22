@@ -1,0 +1,13 @@
+@import "variables.css";
+@import "base.css";
+@import "layout.css";
+@import "components.css";
+@import "modals.css";
+@import "bottom-nav.css";
+@import "responsive.css";
+@import "views/gestion-trabajadores.css";
+@import "views/gestion-prendas.css";
+@import "views/gestion-cortes.css";
+@import "views/nuevo-corte.css";
+@import "views/administrar-tareas.css";
+@import "views/historial-pagos.css";

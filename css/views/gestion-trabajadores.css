@@ -1,0 +1,203 @@
+.trabajadores-header-section {
+  margin-bottom: var(--space-6);
+  padding-top: var(--space-4);
+}
+
+.trabajadores-section-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin-bottom: var(--space-4);
+  letter-spacing: -0.02em;
+}
+
+.trabajadores-form {
+  position: relative;
+}
+
+.trabajadores-form-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.trabajadores-form-input {
+  flex: 1;
+  background-color: var(--color-surface);
+  border-color: var(--color-border);
+  transition: all var(--transition-base);
+}
+
+.trabajadores-form-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-bg), 0 2px 8px rgba(9, 175, 77, 0.1);
+}
+
+.trabajadores-add-btn {
+  transition: all var(--transition-base);
+  box-shadow: 0 2px 8px rgba(9, 175, 77, 0.2);
+}
+
+.trabajadores-add-btn:hover {
+  box-shadow: 0 4px 16px rgba(9, 175, 77, 0.3);
+  transform: scale(1.05);
+}
+
+.trabajadores-add-btn:active {
+  transform: scale(0.95);
+}
+
+.trabajadores-lista {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.trabajador-card {
+  position: relative;
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  animation: fadeIn var(--transition-base) ease both;
+  overflow: hidden;
+}
+
+.trabajador-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-variant) 100%);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.trabajador-card:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(9, 175, 77, 0.12);
+}
+
+.trabajador-card:hover::before {
+  opacity: 1;
+}
+
+.trabajador-card:active {
+  transform: translateY(0);
+}
+
+.trabajador-card.selected {
+  border-color: var(--color-primary);
+  background: linear-gradient(135deg, var(--color-surface-variant) 0%, rgba(9, 175, 77, 0.08) 100%);
+  box-shadow: 0 4px 20px rgba(9, 175, 77, 0.18);
+}
+
+.trabajador-card.selected::before {
+  opacity: 1;
+}
+
+.trabajador-card__contenido {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.trabajador-card__acciones {
+  display: none;
+}
+
+.trabajador-card__nombre {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.trabajador-card__ganancias {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.fab-container {
+  position: fixed;
+  bottom: calc(var(--bottom-nav-height) + var(--space-6));
+  right: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  z-index: 90;
+  opacity: 0;
+  transform: translateY(20px) scale(0.9);
+  transition: all 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.fab-container.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: all;
+}
+
+.modal-edit .modal__body {
+  padding: var(--space-5);
+}
+
+.modal-edit .form-group {
+  margin-bottom: 0;
+}
+
+@media (min-width: 768px) {
+  .trabajadores-section-title {
+    font-size: var(--font-size-2xl);
+  }
+
+  .trabajador-card {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .trabajador-card__nombre {
+    font-size: var(--font-size-xl);
+  }
+
+  .trabajador-card__ganancias {
+    font-size: var(--font-size-lg);
+  }
+}
+
+@media (min-width: 1024px) {
+  .trabajadores-lista {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .trabajador-card {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .trabajador-card__contenido {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .trabajador-card__acciones {
+    display: flex;
+    gap: var(--space-1);
+    flex-shrink: 0;
+    margin-left: var(--space-3);
+  }
+
+  .fab-container {
+    display: none !important;
+  }
+}

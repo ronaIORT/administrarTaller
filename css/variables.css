@@ -1,0 +1,75 @@
+/* =============================================================
+ * VARIABLES CSS - Custom properties del tema oscuro
+ * Modificar estos valores afecta toda la aplicación.
+ * ============================================================= */
+
+:root {
+    /* ----- COLORES ----- */
+    --color-bg: #0a1628;
+    --color-surface: #0f2744;
+    --color-surface-variant: #163557;
+    /*--color-primary: #4da6ff;  -- azul original */
+    --color-primary: #09af4d; /* verde actual */
+    --color-primary-variant: #3d8ae0;
+    --color-primary-bg: rgba(77, 166, 255, 0.12);
+    --color-text: #d4e5f7;
+    --color-text-secondary: #8fb8d8;
+    --color-text-muted: #5a7fa0;
+    --color-border: #1e3a5f;
+    --color-divider: #163557;
+    --color-error: #ef5350;
+    --color-error-bg: rgba(239, 83, 80, 0.12);
+    --color-success: #66bb6a;
+    --color-success-bg: rgba(102, 187, 106, 0.12);
+    --color-warning: #ffb74d;
+    --color-warning-bg: rgba(255, 183, 77, 0.12);
+    --color-info: #42a5f5;
+    --color-info-bg: rgba(66, 165, 245, 0.12);
+
+    /* ----- ESPACIADO ----- */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    /*--space-4: 16px;  -- valor original */
+    --space-4: 8px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* ----- TIPOGRAFÍA ----- */
+    --font-family: "Inter", system-ui, -apple-system, sans-serif;
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.825rem;
+    --font-size-base: 0.925rem;
+    --font-size-md: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.375rem;
+    --font-size-2xl: 1.75rem;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+
+    /* ----- BORDES Y SOMBRAS ----- */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 18px;
+    --radius-full: 999px;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.4);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+    /* ----- TRANSICIONES ----- */
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 400ms ease;
+
+    /* ----- LAYOUT ----- */
+    --header-height: 56px;
+    /*--header-height: 6px;  -- valor de prueba */
+    --bottom-nav-height: 64px;
+    --content-max-width: 720px;
+}

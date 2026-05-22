@@ -1,0 +1,232 @@
+/* =============================================================
+ * NUEVO CORTE - Estilos del formulario de creacion de corte
+ * Incluye: selector de prenda, gestion de tallas (badges),
+ * resumen de costos extendido, y tabla de tareas heredadas.
+ * Reutiliza clases de tareas de gestion-prendas.css.
+ * ============================================================= */
+
+/* ----- SELECTOR DE PRENDA CON BOTON INLINE ----- */
+
+.prendas-selector-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.prendas-selector-row .form-select {
+  flex: 1;
+}
+
+.prendas-selector-row .btn--icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+}
+
+/* ----- ENCABEZADO DE SECCION TALLAS ----- */
+
+.tallas-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.section-title--sm {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+/* ----- FILA DE INPUTS PARA AGREGAR TALLA ----- */
+
+.tallas-input-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+}
+
+.tallas-input-row .form-input:first-child {
+  flex: 1;
+  min-width: 80px;
+}
+
+.tallas-input-row .form-input:nth-child(2) {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.tallas-input-row .btn--icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+/* ----- LISTA DE BADGES DE TALLAS ----- */
+
+.tallas-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  min-height: 36px;
+  align-items: center;
+}
+
+.tallas-lista .empty-state {
+  padding: var(--space-3) 0;
+  width: 100%;
+}
+
+/* ----- BADGE INDIVIDUAL DE TALLA ----- */
+
+.talla-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px 6px var(--space-3);
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  color: var(--color-text);
+  animation: fadeIn var(--transition-base) ease both;
+}
+
+.talla-badge__nombre {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+}
+
+.talla-badge__cantidad {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.talla-badge__remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--transition-fast);
+}
+
+.talla-badge__remove:hover {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.talla-badge__remove svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ----- TOTAL DE PRENDAS ----- */
+
+.tallas-total {
+  margin-top: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.tallas-total__numero {
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- RESUMEN DE COSTOS EXTENDIDO ----- */
+/* Muestra 4 lineas: costo unitario, costo total, precio venta total,
+   y ganancia estimada con color condicional (verde/rojo). */
+
+.resumen-costos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+}
+
+.resumen-costos__fila {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-sm);
+}
+
+.resumen-costos__label {
+  color: var(--color-text-secondary);
+}
+
+.resumen-costos__valor {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.resumen-costos__valor--ganancia {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+}
+
+.resumen-costos__valor--positivo {
+  color: var(--color-success);
+}
+
+.resumen-costos__valor--negativo {
+  color: var(--color-error);
+}
+
+.resumen-costos__divisor {
+  height: 1px;
+  background-color: var(--color-divider);
+  margin: var(--space-1) 0;
+}
+
+/* ----- RESPONSIVE: TABLET (768px+) ----- */
+
+@media (min-width: 768px) {
+  .tallas-input-row .form-input:nth-child(2) {
+    width: 100px;
+  }
+
+  .resumen-costos {
+    padding: var(--space-5);
+  }
+
+  .resumen-costos__fila {
+    font-size: var(--font-size-base);
+  }
+}
+
+/* ----- RESPONSIVE: DESKTOP (1024px+) ----- */
+/* En desktop, los FABs de tarea se ocultan y las acciones
+   de fila se muestran permanentemente como botones inline. */
+
+@media (min-width: 1024px) {
+  .tallas-input-row .form-input:first-child {
+    max-width: 200px;
+  }
+
+  .tallas-input-row .form-input:nth-child(2) {
+    width: 120px;
+  }
+
+  .tarea-tabla-acciones {
+    display: flex;
+  }
+
+  .tareas-fab-container {
+    display: none !important;
+  }
+}

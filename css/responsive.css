@@ -1,0 +1,118 @@
+@media (min-width: 480px) {
+    .form-row--mobile {
+        display: flex;
+        gap: var(--space-3);
+    }
+
+    .form-row--mobile > * {
+        flex: 1;
+    }
+}
+
+@media (min-width: 600px) {
+    .app-container {
+        padding-left: var(--space-5);
+        padding-right: var(--space-5);
+    }
+}
+
+@media (min-width: 768px) {
+    :root {
+        --font-size-base: 0.95rem;
+    }
+
+    .app-container {
+        padding-left: var(--space-6);
+        padding-right: var(--space-6);
+    }
+
+    .form-row--tablet {
+        display: flex;
+        gap: var(--space-3);
+    }
+
+    .form-row--tablet > * {
+        flex: 1;
+    }
+
+    .card {
+        border-radius: var(--radius-lg);
+    }
+}
+
+@media (min-width: 1025px) {
+    /* Desplazar el area de contenido para no solapar el sidebar fijo izquierdo */
+    #app {
+        margin-left: 280px;
+    }
+
+    .app-container {
+        padding-left: var(--space-8);
+        padding-right: var(--space-8);
+        padding-top: calc(var(--header-height) + var(--space-5));
+        padding-bottom: var(--space-8);
+        /* margin: 0 auto heredado de layout.css para centrado real */
+    }
+
+    /* Subvistas sin sidebar: #app ocupa todo el ancho, .app-container centrado completo */
+    body.no-sidebar #app {
+        margin-left: 0;
+    }
+    body.no-sidebar .app-container {
+        padding-top: calc(var(--header-height) + var(--space-8));
+    }
+
+    .bottom-nav {
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        /*left: auto;*/
+        left: 0;
+        width: 280px;
+        height: 100dvh;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: calc(var(--header-height) + var(--space-3)) 0 0 0;
+        border-top: none;
+        border-right: 1px solid var(--color-divider);
+    }
+
+    .nav-item {
+        flex-direction: row;
+        width: 100%;
+        justify-content: flex-start;
+        padding: var(--space-3) var(--space-6);
+        gap: var(--space-3);
+        border-radius: 0;
+    }
+
+    .nav-item__label {
+        font-size: var(--font-size-sm);
+    }
+}
+
+@media (min-width: 1280px) {
+    .app-container {
+        max-width: 960px;
+    }
+}
+
+@media (min-width: 1440px) {
+    .app-container {
+        max-width: 1100px;
+    }
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+    .bottom-nav {
+        height: 48px;
+    }
+
+    .nav-item__label {
+        display: none;
+    }
+
+    .nav-item {
+        gap: 0;
+    }
+}
