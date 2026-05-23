@@ -4,60 +4,60 @@ Aplicación web progresiva (PWA) para la gestión integral de un taller de costu
 
 ## Stack
 
-- **Vanilla JS** (ES modules, sin bundler, sin npm, sin TypeScript)
+- **Vanilla JS** (módulos ES, sin bundler, sin npm, sin TypeScript)
 - **SPA con hash routing** en `js/app.js`
-- **IndexedDB** con Dexie 4 (`js/db.js`)
+- **IndexedDB** con Dexie 4 (`js/db.js`) — sin datos semilla, BD arranca vacía
 - **Tema oscuro** mobile-first con CSS custom properties
-- **Service Worker** para soporte offline
-- **CDN**: Dexie 4, SheetJS (xlsx), jsPDF + AutoTable, Chart.js
+- **Service Worker** en `service-worker.js` — pre-cache de 38 assets, cache-first fetch, SPA fallback offline
+- **CDN**: Dexie 4, SheetJS (xlsx), jsPDF + AutoTable, Chart.js, Inter
 
 ## Inicio rápido
-
-Servir archivos estáticos con cualquier servidor HTTP:
 
 ```bash
 python -m http.server 8080
 ```
 
-O usar VS Code Live Server. La PWA requiere `localhost` o HTTPS para registrar el Service Worker.
+O VS Code Live Server. La PWA requiere `localhost` o HTTPS.
 
 ## Estructura del proyecto
 
 ```
 index.html              → Shell SPA + scripts CDN + <main id="app">
 manifest.json           → PWA manifest (nombre, iconos, theme-color)
-service-worker.js       → Cache-First con limpieza de caches viejos
+service-worker.js       → Install pre-cache, fetch cache-first, message skipWaiting
 js/
-  app.js                → Router hash-based, bottom-nav, registro SW
-  db.js                 → Esquema Dexie + datos semilla
+  app.js                → Router hash, bottom-nav singleton, registro SW + updatefound
+  db.js                 → Esquema Dexie (sin populate/seed)
   utils.js              → Escape HTML, conversión y formateo de moneda
   views/
     shared.js           → Modal confirmar, toast, tabs, header, estado vacío
+    dashboard.js        → KPIs + 3 gráficos con Chart.js
     gestion-cortes.js   → Lista de cortes con filtros y progreso
     gestion-prendas.js  → CRUD prendas + importación Excel
     gestion-trabajadores.js → CRUD trabajadores
+    gestion-pagos.js    → Pagos (3 tabs: resumen, registrar, historial)
     nuevo-corte.js      → Crear corte (seleccionar prenda, tallas, tareas)
-    administrar-tareas/ → Vista de 5 tabs para gestionar un corte
-    gestion-pagos/      → Pagos: resumen, registrar, historial
+    administrar-tareas/ → 5 tabs: resumen, corte, trabajador, editar, asignar
+    gestion-pagos/      → Tabs de pagos: resumen, registrar, historial
 css/
-  style.css             → @import chain (variables → base → layout → ...)
+  style.css             → Cadena @import (variables → base → ... → views/*)
   variables.css         → Custom properties del tema oscuro
   views/                → CSS específico por vista
-icons/                  → Íconos PWA (192x192, 512x512)
+icons/                  → Iconos PWA (192x192, 512x512 PNG)
 ```
 
 ## Rutas hash
 
-| Ruta | Bottom nav |
-|---|---|
-| `#dashboard` | Sí |
-| `#gestion-cortes` | Sí |
-| `#gestion-prendas` | Sí |
-| `#gestion-trabajadores` | Sí |
-| `#historial-pagos` | Sí |
-| `#nuevo-corte` | Oculto |
-| `#administrar-tareas/:id` | Oculto |
-| `#nueva-prenda` / `#editar-prenda/:id` | Oculto |
+| Ruta | Vista | Bottom nav |
+|---|---|---|
+| `#dashboard` | KPIs + Chart.js (3 gráficos) | Sí |
+| `#gestion-cortes` | Lista de cortes | Sí |
+| `#gestion-prendas` | CRUD prendas | Sí |
+| `#gestion-trabajadores` | CRUD trabajadores | Sí |
+| `#historial-pagos` | Pagos (3 tabs) | Sí |
+| `#nuevo-corte` | Formulario de corte | Oculto |
+| `#administrar-tareas/:id` | 5 tabs de gestión | Oculto |
+| `#nueva-prenda` / `#editar-prenda/:id` | Formulario prenda | Oculto |
 
 ## Manejo de moneda
 
@@ -67,14 +67,21 @@ icons/                  → Íconos PWA (192x192, 512x512)
 | `precioVentaUnitario` | Bolivianos | Decimal | `15.00` = 15 Bs |
 | `monto` (pagos) | Centavos | Entero | `2550` = 25.50 Bs |
 
-Usar las funciones de `js/utils.js` para toda conversión: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatCtv()`.
+Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`.
 
 ## Base de datos
 
-- **Sin restricciones FK** — los borrados en cascada deben hacerse manualmente
-- Datos semilla en `db.on("populate")` (solo en primera creación de la BD)
+- **Sin restricciones FK** — borrados en cascada manuales
+- **Sin datos semilla** — la BD arranca vacía
+- Para reiniciar: DevTools → Application → IndexedDB → borrar `TallerCosturaDB`
+
+## Service Worker
+
 - `CACHE_NAME = "taller-costura-v1.0"` — incrementar al modificar assets
+- **Install**: pre-cachea 38 assets locales, `skipWaiting()`
+- **Fetch**: cache-first (cache → network → cachea). Navegación offline → `index.html`
+- **Actualización**: `js/app.js` muestra banner "Nueva versión disponible" al detectar SW nuevo; botón "Recargar" fuerza activación
 
 ## Patrón de vistas
 
-Toda vista sigue el ciclo: **renderizar HTML → cargar datos de la BD → adjuntar event listeners**. Las vistas se re-renderizan por completo tras cada mutación.
+Renderizar HTML → cargar datos → adjuntar event listeners. Re-render completo tras cada mutación. Funciones globales para `onclick` inline exportadas con `window.nombreFuncion = nombreFuncion`.

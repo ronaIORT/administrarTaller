@@ -1,5 +1,6 @@
 import { db } from "./db.js";
 import { escaparHTML } from "./utils.js";
+import { renderDashboard } from "./views/dashboard.js";
 import { renderGestionTrabajadores } from "./views/gestion-trabajadores.js";
 import { renderGestionPrendas, renderFormPrenda } from "./views/gestion-prendas.js";
 import { renderGestionCortes } from "./views/gestion-cortes.js";
@@ -36,8 +37,65 @@ function registrarServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   navigator.serviceWorker
     .register("service-worker.js")
-    .then((reg) => console.log("SW registrado:", reg.scope))
+    .then((reg) => {
+      console.log("SW registrado:", reg.scope);
+
+      // Detectar actualización pendiente (SW en espera)
+      if (reg.waiting) {
+        mostrarBannerActualizacion();
+      }
+
+      // Escuchar nueva actualización
+      reg.addEventListener("updatefound", function () {
+        const newSW = reg.installing;
+        if (!newSW) return;
+
+        newSW.addEventListener("statechange", function () {
+          if (newSW.state === "installed" && navigator.serviceWorker.controller) {
+            console.log("[SW] Nueva versión lista para activar");
+            mostrarBannerActualizacion();
+          }
+        });
+      });
+    })
     .catch((err) => console.error("SW error:", err));
+
+  // También escuchar cambios de estado via controllerchange
+  navigator.serviceWorker.addEventListener("controllerchange", function () {
+    console.log("[SW] Controller cambiado, recargando...");
+    window.location.reload();
+  });
+}
+
+// ============================================================
+// BANNER DE ACTUALIZACIÓN - Se muestra cuando hay nueva versión
+// del Service Worker disponible. El usuario hace clic en
+// "Recargar" para aplicar la actualización.
+// ============================================================
+
+function mostrarBannerActualizacion() {
+  // Evitar duplicados
+  if (document.querySelector(".sw-update-banner")) return;
+
+  const banner = document.createElement("div");
+  banner.className = "sw-update-banner";
+  banner.innerHTML =
+    '<span class="sw-update-banner__texto">Nueva versión disponible</span>' +
+    '<button class="sw-update-banner__btn" id="btn-recargar-sw">Recargar</button>';
+
+  banner.querySelector("#btn-recargar-sw").addEventListener("click", function () {
+    banner.remove();
+    // Forzar activación del SW en espera
+    if (navigator.serviceWorker.controller) {
+      navigator.serviceWorker.getRegistration().then(function (reg) {
+        if (reg && reg.waiting) {
+          reg.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+      });
+    }
+  });
+
+  document.body.appendChild(banner);
 }
 
 // ============================================================
@@ -63,7 +121,7 @@ async function cargarVista(ruta) {
   document.getElementById("at-asignar-fab-container")?.remove();
 
   if (ruta === "#dashboard") {
-    renderPlaceholder(app, "Dashboard", "Panel principal del taller de costura");
+    await renderDashboard();
   } else if (ruta === "#nuevo-corte") {
     await renderNuevoCorte();
   } else if (ruta.startsWith("#administrar-tareas/")) {

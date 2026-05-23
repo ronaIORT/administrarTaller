@@ -4,52 +4,51 @@
 
 - **Vanilla JS** (módulos ES, sin bundler, sin npm, sin TypeScript)
 - **Router SPA basado en hash** en `js/app.js` — carga vistas según `location.hash`
-- **IndexedDB** mediante Dexie 4 (`js/db.js`) — esquema en `db.version(1).stores()`, datos semilla en `db.on("populate")`
+- **IndexedDB** mediante Dexie 4 (`js/db.js`) — esquema en `db.version(1).stores()`, sin datos semilla
 - **Tema oscuro** con custom properties CSS en `css/variables.css`
-- **Service Worker** en `service-worker.js` — solo install/activate (sin handler fetch/cache aún)
+- **Service Worker** en `service-worker.js` — pre-cache install, cache-first fetch, SPA fallback offline, message handler para skipWaiting
+- **Banner de actualización** en `js/app.js` — notifica al usuario cuando hay nueva versión del SW lista
 - Todas las librerías externas cargadas desde CDN: Dexie, SheetJS (xlsx), jsPDF + AutoTable, Chart.js, Inter
 
 ## Comandos
 
-Sin paso de build, linter, test runner ni gestor de paquetes. Servir archivos estáticos:
-
-```
+```bash
 python -m http.server 8080
 ```
 
-O usar VS Code Live Server. La PWA requiere `localhost` o HTTPS para registrar el Service Worker.
+O usar VS Code Live Server. La PWA requiere `localhost` o HTTPS.
 
 ## Arquitectura
 
 ```
 index.html          → scripts CDN + <main id="app"> + <script type="module" src="js/app.js">
-js/app.js           → Router, bottom-nav (singleton), registro del SW, limpieza de FABs
-js/db.js            → Esquema Dexie, datos semilla
+js/app.js           → Router, bottom-nav (singleton), registro del SW con updatefound, limpieza de FABs
+js/db.js            → Esquema Dexie (sin populate/seed)
 js/utils.js         → Escape HTML, conversión y formateo de moneda
-js/views/shared.js  → Modal confirmar, toast, tabs, header, estado vacío (helpers de UI compartidos)
-js/views/           → Un archivo JS por ruta
+js/views/shared.js  → Modal confirmar, toast, tabs, header, estado vacío
+js/views/           → Un archivo JS por ruta; administrar-tareas/ y gestion-pagos/ son subcarpetas con tabs
 css/style.css       → Cadena @import (variables → base → layout → components → modals → bottom-nav → responsive → views/*)
 css/views/          → Un archivo CSS por vista
 ```
 
 ### Rutas hash
 
-| Ruta | Archivo de vista | Bottom nav |
+| Ruta | Vista | Bottom nav |
 |---|---|---|
-| `#dashboard` | Placeholder | Sí |
+| `#dashboard` | `dashboard.js` (Chart.js: KPIs + 3 gráficos) | Sí |
 | `#gestion-cortes` | `gestion-cortes.js` | Sí |
 | `#gestion-prendas` | `gestion-prendas.js` | Sí |
 | `#gestion-trabajadores` | `gestion-trabajadores.js` | Sí |
-| `#historial-pagos` | Placeholder | Sí |
+| `#historial-pagos` | `gestion-pagos.js` (3 tabs: resumen, registrar, historial) | Sí |
 | `#nuevo-corte` | `nuevo-corte.js` | Oculto |
-| `#administrar-tareas/:id` | `administrar-tareas/*.js` (vista de 5 tabs) | Oculto |
+| `#administrar-tareas/:id` | `administrar-tareas/*.js` (5 tabs: resumen, corte, trabajador, editar, asignar) | Oculto |
 | `#nueva-prenda` / `#editar-prenda/:id` | `gestion-prendas.js` | Oculto |
 
 Bottom-nav oculto para rutas que contienen `/` (excepto `#dashboard`) y para `#nuevo-corte` / `#nueva-prenda`.
 
 ### Patrón de vistas
 
-Toda vista sigue: **renderizar HTML → cargar datos de la BD → adjuntar event listeners**. Las vistas se re-renderizan por completo tras cada mutación (sin actualizaciones parciales del DOM).
+Toda vista sigue: **renderizar HTML → cargar datos de la BD → adjuntar event listeners**. Las vistas se re-renderizan por completo tras cada mutación.
 
 **Exportaciones globales:** Los handlers `onclick` inline en template strings requieren funciones en `window.*`.
 ```js
@@ -73,7 +72,7 @@ window.miFuncionGlobal = miFuncionGlobal;
 | `precioVentaUnitario` | **Bolivianos** | Decimal | `15.00` = 15 Bs |
 | `monto` (pagos) | **Centavos** | Entero | `2550` = 25.50 Bs |
 
-Funciones de conversión en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`. Nunca duplicar la lógica de conversión.
+Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`. Nunca duplicar la lógica de conversión.
 
 ## Base de datos
 
@@ -87,26 +86,30 @@ db.cortes:        ++id, estado, prendaId, fechaCreacion, fechaFinalizacion
 db.pagos:         ++id, trabajadorId, corteId, fecha
 ```
 
-- **Sin restricciones FK** — los borrados en cascada deben hacerse manualmente (eliminar pagos por `corteId`, luego eliminar el corte)
-- `db.on("populate")` siembra prendas y trabajadores iniciales al crear la BD por primera vez
-- Los datos semilla solo se reinician si la BD se elimina por completo (un upgrade de versión limpia los datos viejos)
+- **Sin restricciones FK** — borrados en cascada manuales (eliminar pagos por `corteId`, luego eliminar el corte)
+- **Sin datos semilla** — la BD arranca vacía. Para reiniciar, borrar `TallerCosturaDB` desde DevTools → Application → IndexedDB
 
 ## Service Worker
 
-- `CACHE_NAME = "taller-costura-v1.0"` — incrementar este string al modificar assets
-- Actualmente sin handler `fetch` — solo `install`/`activate` con limpieza de caches antiguos
+- `CACHE_NAME = "taller-costura-v1.0"` — incrementar al modificar assets
+- **Install**: pre-cachea 38 assets locales con `addAll` + `skipWaiting()`
+- **Activate**: limpia caches de versiones anteriores + `clients.claim()`
+- **Fetch**: cache-first (cache → network → cachea respuesta). Si offline + navegación SPA → sirve `index.html`. Para scripts/styles sin cache ni red → respuesta vacía
+- **Message**: recibe `{ type: "SKIP_WAITING" }` del cliente para forzar activación
+- Recursos CDN se cachean perezosamente en el primer fetch exitoso (no en `addAll`)
 - Registrado desde `js/app.js`, no desde `index.html`
-- `skipWaiting()` en install, `clients.claim()` en activate
+
+**Banner de actualización:** `js/app.js` escucha `updatefound` en el registro del SW y muestra `.sw-update-banner` (barra fija superior) cuando hay nueva versión en espera. El botón "Recargar" envía `SKIP_WAITING` al SW y fuerza `controllerchange` → recarga la página.
 
 ## Convenciones CSS
 
 - `css/style.css` es el único punto de entrada — usa cadena de `@import`
-- `css/variables.css` contiene todas las custom properties (colores, espaciado, tipografía, sombras, transiciones, layout)
-- `css/base.css` — reset, estilos de scrollbar, keyframes compartidos
-- El CSS específico de cada vista va en `css/views/<nombre-vista>.css`
-- Solo tema oscuro, mobile-first con media queries en `responsive.css`
-- `--header-height: 56px`, `--bottom-nav-height: 64px` — las áreas de contenido deben contemplar estas alturas
-- `--content-max-width: 720px` — ancho máximo para contenedores de contenido principal
+- `css/variables.css` contiene todas las custom properties
+- `css/base.css` — reset, scrollbar, keyframes (`fadeIn`, `slideDown`, `slideInRight`, etc.) y `prefers-reduced-motion`
+- CSS específico de vista en `css/views/<nombre-vista>.css`
+- Tema oscuro fijo, mobile-first con media queries en `responsive.css`
+- `--header-height: 56px`, `--bottom-nav-height: 64px`
+- `--content-max-width: 720px`
 
 ## Estilo de código
 

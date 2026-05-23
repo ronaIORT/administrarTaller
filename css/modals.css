@@ -229,3 +229,55 @@
   background-color: var(--color-surface-variant);
   color: var(--color-text);
 }
+
+/* ============================================================
+   BANNER DE ACTUALIZACIÓN SW
+   Barra fija superior que aparece cuando hay nueva versión
+   del Service Worker lista para instalarse.
+   ============================================================ */
+
+.sw-update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-primary);
+  color: #0a1628;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  animation: slideDown 250ms ease forwards;
+  box-shadow: var(--shadow-md);
+}
+
+.sw-update-banner__texto {
+  flex: 1;
+}
+
+.sw-update-banner__btn {
+  padding: var(--space-1) var(--space-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background-color: #0a1628;
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-family: inherit;
+}
+
+.sw-update-banner__btn:active {
+  opacity: 0.85;
+}
+
+/* Ajustar espacios cuando el banner está visible */
+body:has(.sw-update-banner) .bottom-nav,
+body:has(.sw-update-banner) .app-header {
+  top: 42px;
+}

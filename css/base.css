@@ -111,6 +111,11 @@ table {
   to   { transform: translateX(100%); }
 }
 
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to   { transform: translateY(0); }
+}
+
 @keyframes slideInUp {
   from { transform: translateY(100%); }
   to   { transform: translateY(0); }
