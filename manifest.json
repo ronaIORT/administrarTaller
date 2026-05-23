@@ -2,7 +2,7 @@
   "name": "Taller de Costura",
   "short_name": "Taller",
   "description": "Aplicacion para gestion de taller de costura",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "portrait-primary",
   "theme_color": "#0a1628",
