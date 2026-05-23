@@ -176,24 +176,65 @@ export function renderTabCorte(corte, container, opciones) {
     const btnFinalizar = document.getElementById("btn-finalizar-corte-corte");
     if (btnFinalizar) {
       btnFinalizar.addEventListener("click", function () {
-        mostrarModalConfirmar(
-          "Finalizar Corte",
-          "Al finalizar el corte se marcara como terminado y no se podran agregar mas asignaciones.",
-          "warning",
-          async function () {
-            try {
-              await db.cortes.update(corte.id, {
-                estado: "terminado",
-                fechaFinalizacion: new Date().toISOString(),
-              });
-              mostrarToast("Corte finalizado", "success");
-              if (onFinalizar) await onFinalizar();
-            } catch (err) {
-              console.error("Error al finalizar corte:", err);
-              mostrarToast("Error al finalizar", "error");
-            }
-          },
-        );
+        var overlay = document.createElement("div");
+        overlay.className = "modal-overlay";
+        overlay.setAttribute("role", "dialog");
+        overlay.setAttribute("aria-modal", "true");
+        overlay.setAttribute("aria-labelledby", "modal-finalizar-titulo");
+
+        overlay.innerHTML =
+          '<div class="modal modal--sm modal-edit">' +
+          '<div class="modal__header">' +
+          '<h3 id="modal-finalizar-titulo" class="modal__title">Finalizar Corte</h3>' +
+          '</div>' +
+          '<div class="modal__body">' +
+          '<p>Al finalizar el corte se marcara como terminado y no se podran agregar mas asignaciones.</p>' +
+          '</div>' +
+          '<div class="modal__footer">' +
+          '<button class="btn btn--secondary modal-cancelar">Cancelar</button>' +
+          '<button class="btn btn--success modal-confirmar">Finalizar Corte</button>' +
+          '</div>' +
+          '</div>';
+
+        document.body.appendChild(overlay);
+        document.body.style.overflow = "hidden";
+
+        var cerrar = function () {
+          overlay.classList.add("closing");
+          setTimeout(function () {
+            overlay.remove();
+            document.body.style.overflow = "auto";
+          }, 250);
+        };
+
+        var confirmar = async function () {
+          try {
+            await db.cortes.update(corte.id, {
+              estado: "terminado",
+              fechaFinalizacion: new Date().toISOString(),
+            });
+            mostrarToast("Corte finalizado", "success");
+            if (onFinalizar) await onFinalizar();
+          } catch (err) {
+            console.error("Error al finalizar corte:", err);
+            mostrarToast("Error al finalizar", "error");
+          }
+          cerrar();
+        };
+
+        overlay.querySelector(".modal-cancelar").addEventListener("click", cerrar);
+        overlay.querySelector(".modal-confirmar").addEventListener("click", confirmar);
+        overlay.addEventListener("click", function (e) {
+          if (e.target === overlay) cerrar();
+        });
+
+        var escHandler = function (e) {
+          if (e.key === "Escape") {
+            cerrar();
+            document.removeEventListener("keydown", escHandler);
+          }
+        };
+        document.addEventListener("keydown", escHandler);
       });
     }
   }

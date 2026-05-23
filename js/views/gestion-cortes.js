@@ -221,7 +221,12 @@ function renderListaCortes(cortes) {
         }).join(" ");
       }
 
-      var fecha = c.fechaCreacion ? formatearFecha(c.fechaCreacion) : "";
+      var fechaLabel;
+      if (esTerminado && c.fechaFinalizacion) {
+        fechaLabel = '<span class="corte-card__fecha corte-card__fecha--fin">Finalizado ' + formatearFecha(c.fechaFinalizacion) + '</span>';
+      } else {
+        fechaLabel = '<span class="corte-card__fecha">Inicio ' + (c.fechaCreacion ? formatearFecha(c.fechaCreacion) : "") + '</span>';
+      }
 
       var badgeEstado = esTerminado
         ? '<span class="badge badge--success">Terminado</span>'
@@ -229,11 +234,11 @@ function renderListaCortes(cortes) {
 
       return '<div class="corte-card" data-id="' + c.id + '" role="listitem" style="animation-delay:' + (i * 50) + 'ms">' +
         '<div class="corte-card__header">' +
-        '<span class="corte-card__prenda">' + nombrePrenda + '</span>' +
+        '<span class="corte-card__nombre">' + nombreCorte + '</span>' +
         badgeEstado +
         '</div>' +
-        '<div class="corte-card__nombre-row">' +
-        '<span class="corte-card__nombre">' + nombreCorte + '</span>' +
+        '<div class="corte-card__prenda-row">' +
+        '<span class="corte-card__prenda">' + nombrePrenda + '</span>' +
         '</div>' +
         '<div class="corte-card__body">' +
         '<div class="progress-bar">' +
@@ -242,7 +247,7 @@ function renderListaCortes(cortes) {
         '<div class="corte-card__info">' +
         (tallasTexto ? '<span class="corte-card__tallas">' + tallasTexto + '</span>' : '') +
         '<span class="corte-card__cantidad">' + (c.cantidadPrendas || 0) + ' prendas</span>' +
-        '<span class="corte-card__fecha">Inicio ' + fecha + '</span>' +
+        fechaLabel +
         '</div>' +
         '</div>' +
         '<div class="corte-card__footer">' +

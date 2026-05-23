@@ -96,14 +96,14 @@ export function renderTabResumen(corte, container, opciones) {
     '<span class="at-kpi__valor" style="font-size:var(--font-size-sm);">' + formatearFecha(corte.fechaCreacion) + '</span>' +
     '</div>' +
     '<div class="at-kpi">' +
-    '<span class="at-kpi__label">Tallas</span>' +
-    '<span class="at-kpi__valor">' + (corte.tallas ? corte.tallas.length : 0) + '</span>' +
+    '<span class="at-kpi__label">Finalizacion</span>' +
+    '<span class="at-kpi__valor" style="font-size:var(--font-size-sm);">' + (esTerminado && corte.fechaFinalizacion ? formatearFecha(corte.fechaFinalizacion) : "En curso") + '</span>' +
     '</div>' +
     '</div>' +
 
     // Tallas
     (tallasHTML ? '<div class="at-resumen__seccion">' +
-    '<span class="at-resumen__seccion-titulo">Tallas</span>' +
+    '<span class="at-resumen__seccion-titulo">Tallas (' + (corte.tallas ? corte.tallas.length : 0) + ')</span>' +
     '<div class="at-resumen__tallas">' + tallasHTML + '</div>' +
     '</div>' : "") +
 
@@ -224,24 +224,65 @@ function exportarPDF(corte, prenda) {
 // ============================================================
 
 function confirmarFinalizarCorte(corte, onFinalizar) {
-  mostrarModalConfirmar(
-    "Finalizar Corte",
-    "Al finalizar el corte se marcara como terminado y no se podran agregar mas asignaciones. Esta accion se puede revertir desde la base de datos.",
-    "warning",
-    async function () {
-      try {
-        await db.cortes.update(corte.id, {
-          estado: "terminado",
-          fechaFinalizacion: new Date().toISOString()
-        });
-        mostrarToast("Corte finalizado", "success");
-        if (onFinalizar) await onFinalizar();
-      } catch (err) {
-        console.error("Error al finalizar corte:", err);
-        mostrarToast("Error al finalizar", "error");
-      }
+  var overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "modal-finalizar-titulo");
+
+  overlay.innerHTML =
+    '<div class="modal modal--sm modal-edit">' +
+    '<div class="modal__header">' +
+    '<h3 id="modal-finalizar-titulo" class="modal__title">Finalizar Corte</h3>' +
+    '</div>' +
+    '<div class="modal__body">' +
+    '<p>Al finalizar el corte se marcara como terminado y no se podran agregar mas asignaciones. Esta accion se puede revertir desde la base de datos.</p>' +
+    '</div>' +
+    '<div class="modal__footer">' +
+    '<button class="btn btn--secondary modal-cancelar">Cancelar</button>' +
+    '<button class="btn btn--success modal-confirmar">Finalizar Corte</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = "hidden";
+
+  var cerrar = function () {
+    overlay.classList.add("closing");
+    setTimeout(function () {
+      overlay.remove();
+      document.body.style.overflow = "auto";
+    }, 250);
+  };
+
+  var confirmar = async function () {
+    try {
+      await db.cortes.update(corte.id, {
+        estado: "terminado",
+        fechaFinalizacion: new Date().toISOString()
+      });
+      mostrarToast("Corte finalizado", "success");
+      if (onFinalizar) await onFinalizar();
+    } catch (err) {
+      console.error("Error al finalizar corte:", err);
+      mostrarToast("Error al finalizar", "error");
     }
-  );
+    cerrar();
+  };
+
+  overlay.querySelector(".modal-cancelar").addEventListener("click", cerrar);
+  overlay.querySelector(".modal-confirmar").addEventListener("click", confirmar);
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) cerrar();
+  });
+
+  var escHandler = function (e) {
+    if (e.key === "Escape") {
+      cerrar();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  document.addEventListener("keydown", escHandler);
 }
 
 

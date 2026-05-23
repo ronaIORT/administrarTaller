@@ -120,7 +120,7 @@
   transform: translateY(0);
 }
 
-/* ----- CABECERA DE CARD: PRENDA + NOMBRE CORTE ----- */
+/* ----- CABECERA DE CARD: NOMBRE + BADGE ----- */
 
 .corte-card__header {
   display: flex;
@@ -129,30 +129,30 @@
   gap: var(--space-2);
 }
 
-.corte-card__prenda {
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-primary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  flex-shrink: 0;
-}
-
 .corte-card__nombre {
   font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-bold);
   color: var(--color-text);
   letter-spacing: -0.01em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
-  text-align: right;
 }
 
-.corte-card__nombre-row {
+/* ----- FILA DE PRENDA ----- */
+
+.corte-card__prenda-row {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+}
+
+.corte-card__prenda {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* ----- CUERPO DE CARD: PROGRESO + INFO ----- */
@@ -216,6 +216,11 @@
   color: var(--color-text-muted);
   white-space: nowrap;
   margin-left: auto;
+}
+
+.corte-card__fecha--fin {
+  color: var(--color-success);
+  font-weight: var(--font-weight-semibold);
 }
 
 /* ----- FOOTER DE CARD: BOTONES DE ACCION ----- */
