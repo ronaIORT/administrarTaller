@@ -6,7 +6,12 @@ import { escaparHTML } from "../utils.js";
 // El callback onConfirmar se ejecuta solo si el usuario confirma.
 // ============================================================
 
-export function mostrarModalConfirmar(titulo, mensaje, tipo, onConfirmar) {
+export function mostrarModalConfirmar(titulo, mensaje, tipo, onConfirmar, labelCancelar, labelConfirmar, claseCancelar, claseConfirmar) {
+  const textoCancelar = labelCancelar || "Cancelar";
+  const textoConfirmar = labelConfirmar || "Confirmar";
+  const clsCancelar = claseCancelar || "btn--secondary";
+  const clsConfirmar = claseConfirmar || "btn--danger";
+
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
@@ -25,19 +30,18 @@ export function mostrarModalConfirmar(titulo, mensaje, tipo, onConfirmar) {
       '<div class="confirm-dialog__icon confirm-dialog__icon--info"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div>';
   }
 
-  overlay.innerHTML = `
-    <div class="modal modal--sm confirm-dialog">
-      <div class="modal__body">
-        ${iconoHTML}
-        <h3 id="modal-titulo" class="confirm-dialog__message">${escaparHTML(titulo)}</h3>
-        <p class="confirm-dialog__detail">${escaparHTML(mensaje)}</p>
-      </div>
-      <div class="modal__footer">
-        <button class="btn btn--secondary cancelar-btn">Cancelar</button>
-        <button class="btn btn--danger confirmar-btn">Confirmar</button>
-      </div>
-    </div>
-  `;
+  overlay.innerHTML =
+    '<div class="modal modal--sm confirm-dialog">' +
+    '<div class="modal__body">' +
+    iconoHTML +
+    '<h3 id="modal-titulo" class="confirm-dialog__message">' + escaparHTML(titulo) + '</h3>' +
+    '<p class="confirm-dialog__detail">' + escaparHTML(mensaje) + '</p>' +
+    '</div>' +
+    '<div class="modal__footer">' +
+    '<button class="btn ' + clsCancelar + ' cancelar-btn">' + escaparHTML(textoCancelar) + '</button>' +
+    '<button class="btn ' + clsConfirmar + ' confirmar-btn">' + escaparHTML(textoConfirmar) + '</button>' +
+    '</div>' +
+    '</div>';
 
   document.body.appendChild(overlay);
   // overflow: hidden previene que el fondo se desplace mientras

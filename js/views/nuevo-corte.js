@@ -164,14 +164,22 @@ export async function renderNuevoCorte() {
   });
 
   document.getElementById("btn-cancelar-corte").addEventListener("click", function () {
-    mostrarModalConfirmar(
-      "Descartar cambios",
-      "Estas seguro de descartar los cambios? Los datos no guardados se perderan.",
-      "warning",
-      function () {
-        location.hash = "#gestion-cortes";
-      }
-    );
+    if (hayCambiosSinGuardar()) {
+      mostrarModalConfirmar(
+        "¿Descartar cambios?",
+        "Los cambios que hiciste no se guardaran.",
+        "warning",
+        function () {
+          location.hash = "#gestion-cortes";
+        },
+        "Seguir editando",
+        "Descartar cambios",
+        "btn--primary",
+        "btn--danger"
+      );
+    } else {
+      location.hash = "#gestion-cortes";
+    }
   });
 
   document.getElementById("form-nuevo-corte").addEventListener("submit", function (e) {
@@ -273,11 +281,49 @@ export async function renderNuevoCorte() {
   if (btnVolver) {
     btnVolver.addEventListener("click", function (e) {
       e.preventDefault();
-      location.hash = "#gestion-cortes";
+      if (hayCambiosSinGuardar()) {
+        mostrarModalConfirmar(
+          "¿Descartar cambios?",
+          "Los cambios que hiciste no se guardaran.",
+          "warning",
+          function () {
+            location.hash = "#gestion-cortes";
+          },
+          "Seguir editando",
+          "Descartar cambios",
+          "btn--primary",
+          "btn--danger"
+        );
+      } else {
+        location.hash = "#gestion-cortes";
+      }
     });
   }
 
   deseleccionarFilaTarea();
+}
+
+// ============================================================
+// DETECCION DE CAMBIOS - Compara estado actual vs inicial
+// para decidir si mostrar confirmacion al volver.
+// ============================================================
+
+function hayCambiosSinGuardar() {
+  var select = document.getElementById("select-prenda");
+  var inputNombre = document.getElementById("input-nombre-corte");
+  var inputPrecio = document.getElementById("input-precio-venta");
+
+  var prendaIdActual = select && select.value ? parseInt(select.value) : null;
+  var nombreActual = inputNombre ? inputNombre.value.trim() : "";
+  var precioActual = (inputPrecio && inputPrecio.value) ? parseFloat(inputPrecio.value) : 0;
+
+  if (prendaIdActual !== null) return true;
+  if (nombreActual !== "") return true;
+  if (precioActual !== 0) return true;
+  if (tallasData.length > 0) return true;
+  if (tareasData.length > 0) return true;
+
+  return false;
 }
 
 // ============================================================

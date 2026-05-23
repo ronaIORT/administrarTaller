@@ -680,14 +680,27 @@ export async function renderFormPrenda(id) {
   });
 
   document.getElementById("btn-cancelar-prenda").addEventListener("click", () => {
-    mostrarModalConfirmar(
-      "Descartar cambios",
-      "Estas seguro de descartar los cambios? Los datos no guardados se perderan.",
-      "warning",
-      () => {
-        location.hash = "#gestion-prendas";
-      }
-    );
+    const nombreActual = document.getElementById("input-nombre-prenda")?.value.trim() || "";
+    const tareasActuales = obtenerTareasData() || [];
+    const tareasActualesJSON = JSON.stringify(tareasActuales.filter((t) => t.nombre && t.nombre.trim()));
+    const huboCambios = nombreActual !== nombreOriginal || tareasActualesJSON !== tareasOriginalesJSON;
+
+    if (huboCambios) {
+      mostrarModalConfirmar(
+        "¿Descartar cambios?",
+        "Los cambios que hiciste no se guardaran.",
+        "warning",
+        () => {
+          location.hash = "#gestion-prendas";
+        },
+        "Seguir editando",
+        "Descartar cambios",
+        "btn--primary",
+        "btn--danger"
+      );
+    } else {
+      location.hash = "#gestion-prendas";
+    }
   });
 
   // ============================================================
@@ -804,12 +817,16 @@ export async function renderFormPrenda(id) {
 
       if (huboCambios) {
         mostrarModalConfirmar(
-          "Descartar cambios",
-          "Estas seguro de descartar los cambios? Los datos no guardados se perderan.",
+          "¿Descartar cambios?",
+          "Los cambios que hiciste no se guardaran.",
           "warning",
           () => {
             location.hash = "#gestion-prendas";
-          }
+          },
+          "Seguir editando",
+          "Descartar cambios",
+          "btn--primary",
+          "btn--danger"
         );
       } else {
         location.hash = "#gestion-prendas";
