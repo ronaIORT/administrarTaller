@@ -102,7 +102,7 @@ export async function renderNuevoCorte() {
     '</div>' +
     '<div class="tallas-input-row">' +
     '<input type="text" id="input-talla-nombre" class="form-input" placeholder="Ej: S, M, L" maxlength="10" autocomplete="off" />' +
-    '<input type="number" id="input-talla-cantidad" class="form-input" placeholder="Cant" min="1" max="9999" step="1" autocomplete="off" />' +
+    '<input type="number" id="input-talla-cantidad" class="form-input" placeholder="Cant" min="1" max="9999" step="1" autocomplete="off" enterkeyhint="done" />' +
     '<button type="button" class="btn btn--outline btn--icon" id="btn-agregar-talla" aria-label="Agregar talla">' +
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
     '</button>' +
@@ -231,7 +231,7 @@ export async function renderNuevoCorte() {
     }
   });
   document.getElementById("input-talla-cantidad").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
+    if (e.key === "Enter" || e.keyCode === 13) {
       e.preventDefault();
       agregarTalla();
     }
