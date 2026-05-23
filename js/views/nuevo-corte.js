@@ -96,14 +96,17 @@ export async function renderNuevoCorte() {
     '<input type="number" id="input-precio-venta" class="form-input" placeholder="0.00" min="0" step="0.01" required autocomplete="off" />' +
     '<p id="error-precio-venta" class="form-error" hidden></p>' +
     '</div>' +
+    '</form>' +
+
+    '<form id="form-tallas">' +
     '<div class="form-group">' +
     '<div class="tallas-section-header">' +
     '<span class="section-title--sm">Tallas</span>' +
     '</div>' +
     '<div class="tallas-input-row">' +
     '<input type="text" id="input-talla-nombre" class="form-input" placeholder="Ej: S, M, L" maxlength="10" autocomplete="off" />' +
-    '<input type="number" id="input-talla-cantidad" class="form-input" placeholder="Cant" min="1" max="9999" step="1" autocomplete="off" enterkeyhint="done" />' +
-    '<button type="button" class="btn btn--outline btn--icon" id="btn-agregar-talla" aria-label="Agregar talla">' +
+    '<input type="number" id="input-talla-cantidad" class="form-input" placeholder="Cant" min="1" max="9999" step="1" autocomplete="off" />' +
+    '<button type="submit" class="btn btn--outline btn--icon" id="btn-agregar-talla" aria-label="Agregar talla">' +
     '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
     '</button>' +
     '</div>' +
@@ -114,6 +117,9 @@ export async function renderNuevoCorte() {
     '</div>' +
     '<p class="tallas-total" id="tallas-total-p" style="display:none;">Total: <span class="tallas-total__numero" id="tallas-total-num">0</span> prendas</p>' +
     '</div>' +
+    '</form>' +
+
+    '<div id="nc-form-rest">' +
     '<div class="form-group">' +
     '<div class="tareas-section-header">' +
     '<span class="section-title">Tareas</span>' +
@@ -143,15 +149,20 @@ export async function renderNuevoCorte() {
     '</div>' +
     '<div class="form-actions">' +
     '<button type="button" class="btn btn--secondary" id="btn-cancelar-corte">Cancelar</button>' +
-    '<button type="submit" class="btn btn--primary" id="btn-guardar-corte">Guardar Corte</button>' +
+    '<button type="button" class="btn btn--primary" id="btn-guardar-corte">Guardar Corte</button>' +
     '</div>' +
-    '</form>';
+    '</div>';
 
   container.innerHTML = htmlFormulario;
 
   document.getElementById("select-prenda").addEventListener("change", onPrendaChange);
   document.getElementById("btn-nueva-prenda-inline").addEventListener("click", abrirModalNuevaPrenda);
-  document.getElementById("btn-agregar-talla").addEventListener("click", agregarTalla);
+
+  document.getElementById("form-tallas").addEventListener("submit", function (e) {
+    e.preventDefault();
+    agregarTalla();
+  });
+
   document.getElementById("btn-cancelar-corte").addEventListener("click", function () {
     mostrarModalConfirmar(
       "Descartar cambios",
@@ -162,10 +173,12 @@ export async function renderNuevoCorte() {
       }
     );
   });
+
   document.getElementById("form-nuevo-corte").addEventListener("submit", function (e) {
     e.preventDefault();
-    guardarCorte();
   });
+
+  document.getElementById("btn-guardar-corte").addEventListener("click", guardarCorte);
 
   document.getElementById("btn-nc-agregar-tarea").addEventListener("click", function () {
     var inputNombre = document.getElementById("input-nc-nombre-tarea");
@@ -228,12 +241,6 @@ export async function renderNuevoCorte() {
     if (e.key === "Enter") {
       e.preventDefault();
       document.getElementById("input-talla-cantidad").focus();
-    }
-  });
-  document.getElementById("input-talla-cantidad").addEventListener("keydown", function (e) {
-    if (e.key === "Enter" || e.keyCode === 13) {
-      e.preventDefault();
-      agregarTalla();
     }
   });
 
