@@ -54,6 +54,12 @@
         /* margin: 0 auto heredado de layout.css para centrado real */
     }
 
+    /* Vistas principales sin header fijo: no compensar altura del header */
+    .app-container--no-header {
+        padding-top: var(--space-8);
+        padding-bottom: var(--space-8);
+    }
+
     /* Subvistas sin sidebar: #app ocupa todo el ancho, .app-container centrado completo */
     body.no-sidebar #app {
         margin-left: 0;
