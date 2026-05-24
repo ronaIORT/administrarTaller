@@ -1,13 +1,15 @@
 // ============================================================
-// DASHBOARD v2.0 — KPIs, charts y resúmenes con período global
+// DASHBOARD — KPIs, charts y resúmenes con período global
 // Período sticky afecta: KPIs financieros, charts 1/2/3/5,
 // caja, cortes recientes y últimos pagos.
-// No afecta: Cortes Activos, Pendiente, Progreso, Pipeline.
+// No afecta: Cortes Activos, Pendiente, Progreso.
 // Charts: (1) Ingresos/Costos Bar+Line, (2) Rentabilidad HBar,
-//         (3) Margen Line, (4) Pipeline Doughnut, (5) Top 3 HBar
+//         (3) Margen Line, (4) Distribución Costos Doughnut,
+//         (5) Top 3 HBar
 // ============================================================
 
 import { db } from "../db.js";
+import { APP_VERSION } from "../version.js";
 import { formatBs, centavosABolivianos, escaparHTML } from "../utils.js";
 import { estadoVacioHTML } from "./shared.js";
 
@@ -26,7 +28,7 @@ const PERIODOS = [
   { id: "todo", label: "Todo" }
 ];
 
-const CHART_IDS = ["chart-ingresos-costos", "chart-rentabilidad", "chart-margen", "chart-pipeline", "chart-top-cortes"];
+const CHART_IDS = ["chart-ingresos-costos", "chart-rentabilidad", "chart-margen", "chart-dist-costos", "chart-top-cortes"];
 
 // ============================================================
 // PERÍODO HELPERS
@@ -142,20 +144,6 @@ function calcularPagosRealesMes(pagos, year, month) {
     if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
     return sum + (p.monto || 0);
   }, 0);
-  return centavosABolivianos(centavos);
-}
-
-function calcularManoObraEstimadaPeriodo(cortes, periodo) {
-  var centavos = 0;
-  cortes.forEach(function (c) {
-    if (c.estado !== "terminado" || !c.fechaFinalizacion) return;
-    if (!estaEnPeriodo(c.fechaFinalizacion, periodo)) return;
-    (c.tareas || []).forEach(function (t) {
-      (t.asignaciones || []).forEach(function (a) {
-        centavos += (a.cantidad || 0) * (t.precioUnitario || 0);
-      });
-    });
-  });
   return centavosABolivianos(centavos);
 }
 
@@ -368,7 +356,7 @@ function buildDashboardHTML(datos) {
     buildProgresoHTML(datos.cortes) +
     buildCortesRecientesHTML(datos.cortes, prendasMap, periodo) +
     buildPagosRecientesHTML(datos.pagos, datos.cortes, trabajadoresMap, periodo) +
-    '<div class="app-version">v2.0</div>';
+    '<div class="app-version">v' + APP_VERSION + '</div>';
 }
 
 function buildPeriodSelectorHTML() {
@@ -522,11 +510,11 @@ function buildChartsHTML() {
     '<div class="dash-charts-row">' +
       '<div class="dash-section">' +
         '<div class="dash-section__header">' +
-          '<h2 class="dash-section__title">Pipeline de Producción</h2>' +
+          '<h2 class="dash-section__title">Distribución de Costos</h2>' +
         '</div>' +
         '<div class="card chart-card">' +
           '<div class="chart-container chart-container--square">' +
-            '<canvas id="chart-pipeline"></canvas>' +
+            '<canvas id="chart-dist-costos"></canvas>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -678,6 +666,7 @@ function buildCortesRecientesHTML(cortes, prendasMap, periodo) {
 // ============================================================
 
 function buildPagosRecientesHTML(pagos, cortes, trabajadoresMap, periodo) {
+  var cortesMap = new Map(cortes.map(function (c) { return [c.id, c]; }));
   var enPeriodo = pagos.filter(function (p) {
     return estaEnPeriodo(p.fecha, periodo);
   });
@@ -734,7 +723,7 @@ function renderAllCharts(datos, periodo) {
   renderChartIngresosCostos(datos, periodo);
   renderChartRentabilidad(datos, periodo);
   renderChartMargen(datos, periodo);
-  renderChartPipeline(datos);
+  renderChartDistCostos(datos, periodo);
   renderChartTopCortes(datos, periodo);
 }
 
@@ -831,9 +820,7 @@ function renderChartRentabilidad(datos, periodo) {
       var cantidad = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
       ing += cantidad * (c.precioVentaUnitario || 0);
     });
-    var gast = calcularManoObraEstimadaPorPrenda(datos.cortes.filter(function (c) {
-      return c.prendaId === prenda.id && c.estado === "terminado" && estaEnPeriodo(c.fechaFinalizacion, periodo);
-    }), prenda.id);
+    var gast = calcularManoObraEstimadaPorPrenda(cortesDePrenda, prenda.id);
 
     labels.push(prenda.nombre);
     ingresosData.push(ing);
@@ -987,39 +974,49 @@ function renderChartMargen(datos, periodo) {
 // CHART 4: PIPELINE DE PRODUCCIÓN (Doughnut)
 // ============================================================
 
-function renderChartPipeline(datos) {
-  var canvas = document.getElementById("chart-pipeline");
+function renderChartDistCostos(datos, periodo) {
+  var canvas = document.getElementById("chart-dist-costos");
   if (!canvas) return;
   var Chart = window.Chart;
   if (!Chart) return;
 
-  var activos = datos.cortes.filter(function (c) { return c.estado === "activo"; });
-  if (activos.length === 0) {
-    chartInstances["chart-pipeline"] = null;
+  var labels = [];
+  var costosData = [];
+  var totalCostos = 0;
+
+  datos.prendas.forEach(function (prenda) {
+    var costoCtv = 0;
+    datos.cortes.forEach(function (c) {
+      if (c.prendaId !== prenda.id) return;
+      if (c.estado !== "terminado" || !c.fechaFinalizacion) return;
+      if (!estaEnPeriodo(c.fechaFinalizacion, periodo)) return;
+      (c.tareas || []).forEach(function (t) {
+        (t.asignaciones || []).forEach(function (a) {
+          costoCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
+        });
+      });
+    });
+    if (costoCtv > 0) {
+      labels.push(prenda.nombre);
+      costosData.push(costoCtv);
+      totalCostos += costoCtv;
+    }
+  });
+
+  if (labels.length === 0) {
+    chartInstances["chart-dist-costos"] = null;
     return;
   }
 
-  var prendasMap = new Map(datos.prendas.map(function (p) { return [p.id, p]; }));
-  var conteo = {};
-  activos.forEach(function (c) {
-    var nombre = prendasMap.get(c.prendaId);
-    var key = nombre ? nombre.nombre : "Sin tipo";
-    conteo[key] = (conteo[key] || 0) + 1;
-  });
-
-  var labels = Object.keys(conteo);
-  var dataValues = Object.values(conteo);
-  var totalActivos = activos.length;
-
-  var doughnutColors = ["#09af4d", "#42a5f5", "#ffb74d", "#ef5350", "#ab47bc", "#26c6da", "#7e57c2", "#66bb6a"];
+  var doughnutColors = ["#ef5350", "#ffb74d", "#ab47bc", "#42a5f5", "#26c6da", "#7e57c2", "#66bb6a", "#ff7043"];
 
   var ctx = canvas.getContext("2d");
-  chartInstances["chart-pipeline"] = new Chart(ctx, {
+  chartInstances["chart-dist-costos"] = new Chart(ctx, {
     type: "doughnut",
     data: {
       labels: labels,
       datasets: [{
-        data: dataValues,
+        data: costosData,
         backgroundColor: doughnutColors.slice(0, labels.length),
         borderColor: "#0f2744",
         borderWidth: 2,
@@ -1052,7 +1049,8 @@ function renderChartPipeline(datos) {
           callbacks: {
             label: function (context) {
               var val = context.parsed;
-              return " " + context.label + ": " + val + (val === 1 ? " corte" : " cortes");
+              var pct = totalCostos > 0 ? ((val / totalCostos) * 100).toFixed(1) : 0;
+              return " " + context.label + ": Bs " + (val / 100).toFixed(2) + " (" + pct + "%)";
             }
           }
         }
@@ -1068,11 +1066,11 @@ function renderChartPipeline(datos) {
         ctx2.textAlign = "center";
         ctx2.textBaseline = "middle";
         ctx2.font = "700 28px 'Inter', sans-serif";
-        ctx2.fillStyle = "#d4e5f7";
-        ctx2.fillText(totalActivos, centerX, centerY - 8);
+        ctx2.fillStyle = "#ef5350";
+        ctx2.fillText("Bs " + (totalCostos / 100).toFixed(0), centerX, centerY - 8);
         ctx2.font = "400 11px 'Inter', sans-serif";
         ctx2.fillStyle = "#5a7fa0";
-        ctx2.fillText(totalActivos === 1 ? "corte activo" : "cortes activos", centerX, centerY + 16);
+        ctx2.fillText("costo total", centerX, centerY + 16);
         ctx2.restore();
       }
     }]
