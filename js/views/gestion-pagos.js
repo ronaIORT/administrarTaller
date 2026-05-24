@@ -1,8 +1,9 @@
 // ============================================================
-// GESTION DE PAGOS - Vista principal con 3 tabs
+// GESTION DE PAGOS - Vista principal con 4 tabs
 // Tab Resumen: saldos por trabajador (filtrable por estado de corte)
 // Tab Registrar: formulario de pago global por trabajador
 // Tab Historial: lista de pagos con filtro y eliminacion
+// Tab Gastos: registro y listado de gastos operativos
 // Ruta: #historial-pagos (bottom-nav visible)
 // ============================================================
 
@@ -11,6 +12,7 @@ import { mostrarToast, estadoVacioHTML } from "./shared.js";
 import { renderTabResumen } from "./gestion-pagos/tab-resumen.js";
 import { renderTabRegistrar } from "./gestion-pagos/tab-registrar.js";
 import { renderTabHistorial } from "./gestion-pagos/tab-historial.js";
+import { renderTabGastos } from "./gestion-pagos/tab-gastos.js";
 
 // ============================================================
 // ESTADO DEL MODULO
@@ -32,12 +34,15 @@ let tabContentEl = null;
 let tabsWrapperEl = null;
 /** Trabajador preseleccionado desde el tab Resumen */
 let trabajadorPreseleccionado = null;
+/** Todos los gastos operativos cargados desde IndexedDB */
+let gastos = [];
 
-/** Definicion de los 3 tabs */
+/** Definicion de los 4 tabs */
 const TABS = [
   { id: "resumen", label: "Resumen" },
   { id: "registrar", label: "Registrar" },
   { id: "historial", label: "Historial" },
+  { id: "gastos", label: "Gastos" },
 ];
 
 // ============================================================
@@ -64,14 +69,16 @@ export async function renderHistorialPagos() {
   container.innerHTML = '<div class="spinner" style="margin-top:60px;"></div>';
 
   try {
-    const [pagosDB, cortesDB, trabajadoresDB] = await Promise.all([
+    const [pagosDB, cortesDB, trabajadoresDB, gastosDB] = await Promise.all([
       db.pagos.toArray(),
       db.cortes.toArray(),
       db.trabajadores.toArray(),
+      db.gastos.toArray(),
     ]);
 
     pagos = pagosDB;
     cortes = cortesDB;
+    gastos = gastosDB;
     trabajadoresLista = trabajadoresDB;
     trabajadoresMap = {};
     trabajadoresLista.forEach(function (t) {
@@ -229,6 +236,12 @@ function renderTabActivo() {
         onPagoEliminado: recargarDatos,
       });
       break;
+    case "gastos":
+      renderTabGastos(gastos, tabContentEl, {
+        onGastoRegistrado: recargarDatos,
+        onGastoEliminado: recargarDatos,
+      });
+      break;
   }
 }
 
@@ -238,14 +251,16 @@ function renderTabActivo() {
 
 async function recargarDatos() {
   try {
-    const [pagosDB, cortesDB, trabajadoresDB] = await Promise.all([
+    const [pagosDB, cortesDB, trabajadoresDB, gastosDB] = await Promise.all([
       db.pagos.toArray(),
       db.cortes.toArray(),
       db.trabajadores.toArray(),
+      db.gastos.toArray(),
     ]);
 
     pagos = pagosDB;
     cortes = cortesDB;
+    gastos = gastosDB;
     trabajadoresLista = trabajadoresDB;
     trabajadoresMap = {};
     trabajadoresLista.forEach(function (t) {

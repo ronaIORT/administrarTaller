@@ -4,7 +4,7 @@
 // actualización del service worker en clientes existentes.
 // ============================================================
 
-const CACHE_NAME = "taller-costura-v2.3";
+const CACHE_NAME = "taller-costura-v2.5";
 
 // ============================================================
 // ASSETS LOCALES - Pre-cacheados durante el evento install
@@ -48,6 +48,7 @@ const ASSETS_LOCALES = [
   "./js/views/gestion-pagos/tab-historial.js",
   "./js/views/gestion-pagos/tab-registrar.js",
   "./js/views/gestion-pagos/tab-resumen.js",
+  "./js/views/gestion-pagos/tab-gastos.js",
   "./icons/icon-192x192.png",
   "./icons/icon-512x512.png",
 ];

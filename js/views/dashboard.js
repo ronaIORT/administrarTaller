@@ -147,6 +147,22 @@ function calcularPagosRealesMes(pagos, year, month) {
   return centavosABolivianos(centavos);
 }
 
+function calcularGastosPeriodo(gastos, periodo) {
+  return gastos.reduce(function (sum, g) {
+    if (!g.fecha || !estaEnPeriodo(g.fecha, periodo)) return sum;
+    return sum + (g.monto || 0);
+  }, 0);
+}
+
+function calcularGastosMes(gastos, year, month) {
+  return gastos.reduce(function (sum, g) {
+    if (!g.fecha) return sum;
+    var d = new Date(g.fecha);
+    if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
+    return sum + (g.monto || 0);
+  }, 0);
+}
+
 function calcularManoObraEstimadaPorPrenda(cortes) {
   var centavos = 0;
   cortes.forEach(function (c) {
@@ -264,7 +280,7 @@ function diasDesde(fechaISO) {
 
 function calcularKPIs(datos, periodo) {
   var ingresos = calcularIngresosPeriodo(datos.cortes, periodo);
-  var costos = calcularPagosRealesPeriodo(datos.pagos, periodo);
+  var costos = calcularPagosRealesPeriodo(datos.pagos, periodo) + calcularGastosPeriodo(datos.gastos, periodo);
   return {
     cortesActivos: datos.cortes.filter(function (c) { return c.estado === "activo"; }).length,
     ingresosMes: ingresos,
@@ -330,9 +346,10 @@ function cargarDatos() {
     db.cortes.toArray(),
     db.pagos.toArray(),
     db.prendas.toArray(),
-    db.trabajadores.toArray()
+    db.trabajadores.toArray(),
+    db.gastos.toArray()
   ]).then(function (r) {
-    return { cortes: r[0], pagos: r[1], prendas: r[2], trabajadores: r[3] };
+    return { cortes: r[0], pagos: r[1], prendas: r[2], trabajadores: r[3], gastos: r[4] };
   });
 }
 
@@ -362,6 +379,7 @@ function buildDashboardHTML(datos) {
     buildProgresoHTML(datos.cortes) +
     buildCortesRecientesHTML(datos.cortes, prendasMap, periodo) +
     buildPagosRecientesHTML(datos.pagos, datos.cortes, trabajadoresMap, periodo) +
+    buildGastosRecientesHTML(datos.gastos, periodo) +
     '<div class="app-version">v' + APP_VERSION + '</div>';
 }
 
@@ -558,7 +576,7 @@ function buildCashSummaryHTML(kpis) {
       '</div>' +
       '<div class="cash-summary__divider"></div>' +
       '<div class="cash-summary__item cash-summary__item--out">' +
-        '<span class="cash-summary__label">Pagado</span>' +
+        '<span class="cash-summary__label">Egresos</span>' +
         '<span class="cash-summary__value">' + formatBsValor(kpis.costosMes) + '</span>' +
       '</div>' +
       '<div class="cash-summary__divider"></div>' +
@@ -722,6 +740,68 @@ function buildPagosRecientesHTML(pagos, cortes, trabajadoresMap, periodo) {
 }
 
 // ============================================================
+// ULTIMOS GASTOS OPERATIVOS
+// ============================================================
+
+function buildGastosRecientesHTML(gastos, periodo) {
+  var CATEGORIAS_MAP = {
+    hilos: "Hilos",
+    aceite: "Aceite/Mantenimiento",
+    repuestos: "Repuestos",
+    servicios: "Servicios",
+    otros: "Otros"
+  };
+
+  var enPeriodo = (gastos || []).filter(function (g) {
+    return estaEnPeriodo(g.fecha, periodo);
+  });
+
+  var recientes = enPeriodo
+    .slice()
+    .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); })
+    .slice(0, 5);
+
+  if (recientes.length === 0) {
+    return '<div class="dash-section" id="dash-gastos-recientes">' +
+      '<div class="dash-section__header">' +
+        '<h2 class="dash-section__title">Ultimos Gastos</h2>' +
+        '<a class="dash-section__link" data-nav="#historial-pagos">Ver todos →</a>' +
+      '</div>' +
+      '<div class="card">' + estadoVacioHTML("Sin gastos en este periodo", "Registra tu primer gasto operativo") + '</div>' +
+    '</div>';
+  }
+
+  var html = '<div class="dash-section" id="dash-gastos-recientes">' +
+    '<div class="dash-section__header">' +
+      '<h2 class="dash-section__title">Ultimos Gastos</h2>' +
+      '<a class="dash-section__link" data-nav="#historial-pagos">Ver todos →</a>' +
+    '</div>';
+
+  recientes.forEach(function (g) {
+    var catLabel = CATEGORIAS_MAP[g.cat] || (g.cat || "Sin categoria");
+    var catClase = g.cat || "otros";
+    var fecha = formatFechaCorta(g.fecha);
+    var montoStr = "Bs " + (g.monto || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+    html += '<div class="dash-list-item" data-nav="#historial-pagos">' +
+      '<div class="dash-list-item__info">' +
+        '<span class="dash-list-item__name">' + escaparHTML(g.descripcion || "Sin descripcion") + '</span>' +
+        '<span class="dash-list-item__detail">' +
+          '<span class="pg-gasto-card__cat pg-gasto-card__cat--' + catClase + '" style="display:inline-block;margin-right:4px;">' + escaparHTML(catLabel) + '</span>' +
+        '</span>' +
+      '</div>' +
+      '<div class="dash-list-item__meta">' +
+        '<span class="dash-list-item__monto" style="color:var(--color-primary);">' + montoStr + '</span>' +
+        '<span class="dash-list-item__fecha">' + fecha + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+
+  html += '</div>';
+  return html;
+}
+
+// ============================================================
 // RENDER ALL CHARTS
 // ============================================================
 
@@ -751,7 +831,7 @@ function renderChartIngresosCostos(datos, periodo) {
 
   meses.forEach(function (m) {
     var ing = calcularIngresosMesCorte(datos.cortes, m.year, m.month);
-    var gast = calcularPagosRealesMes(datos.pagos, m.year, m.month);
+    var gast = calcularPagosRealesMes(datos.pagos, m.year, m.month) + calcularGastosMes(datos.gastos, m.year, m.month);
     ingresosData.push(ing);
     costosData.push(gast);
     gananciaData.push(ing - gast);
@@ -910,7 +990,7 @@ function renderChartMargen(datos, periodo) {
 
   meses.forEach(function (m) {
     var ing = calcularIngresosMesCorte(datos.cortes, m.year, m.month);
-    var gast = calcularPagosRealesMes(datos.pagos, m.year, m.month);
+    var gast = calcularPagosRealesMes(datos.pagos, m.year, m.month) + calcularGastosMes(datos.gastos, m.year, m.month);
     var mrg = ing > 0 ? ((ing - gast) / ing) * 100 : null;
     margenData.push(mrg);
   });
@@ -1009,12 +1089,25 @@ function renderChartDistCostos(datos, periodo) {
     }
   });
 
+  // Agregar gastos operativos como segmento adicional
+  var gastosOperativosCtv = 0;
+  (datos.gastos || []).forEach(function (g) {
+    if (g.fecha && estaEnPeriodo(g.fecha, periodo)) {
+      gastosOperativosCtv += Math.round((g.monto || 0) * 100);
+    }
+  });
+  if (gastosOperativosCtv > 0) {
+    labels.push("Gastos Operativos");
+    costosData.push(gastosOperativosCtv);
+    totalCostos += gastosOperativosCtv;
+  }
+
   if (labels.length === 0) {
     chartInstances["chart-dist-costos"] = null;
     return;
   }
 
-  var doughnutColors = ["#ef5350", "#ffb74d", "#ab47bc", "#42a5f5", "#26c6da", "#7e57c2", "#66bb6a", "#ff7043"];
+  var doughnutColors = ["#ef5350", "#ffb74d", "#ab47bc", "#42a5f5", "#26c6da", "#7e57c2", "#66bb6a", "#ff7043", "#78909c"];
 
   var ctx = canvas.getContext("2d");
   chartInstances["chart-dist-costos"] = new Chart(ctx, {
@@ -1101,8 +1194,8 @@ function renderChartTopCortes(datos, periodo) {
     return;
   }
 
-  var labels = topCortes.map(function (t) {
-    var label = t.nombre;
+  var labels = topCortes.map(function (t, i) {
+    var label = "#" + (i + 1) + " " + t.nombre;
     if (t.prendaNombre) label += " (" + t.prendaNombre + ")";
     return label;
   });
@@ -1160,7 +1253,7 @@ function renderChartTopCortes(datos, periodo) {
             font: { family: "'Inter', sans-serif", size: 11 },
             callback: function (value) {
               var str = value || "";
-              return str.length > 22 ? str.slice(0, 20) + "…" : str;
+              return str.length > 26 ? str.slice(0, 24) + "\u2026" : str;
             }
           }
         }
@@ -1277,6 +1370,10 @@ function handleClick(e) {
     // Replace últimos pagos
     var pagosSection = container.querySelector("#dash-pagos-recientes");
     if (pagosSection) pagosSection.outerHTML = buildPagosRecientesHTML(datosDashboard.pagos, datosDashboard.cortes, trabajadoresMap, periodo);
+
+    // Replace últimos gastos
+    var gastosSection = container.querySelector("#dash-gastos-recientes");
+    if (gastosSection) gastosSection.outerHTML = buildGastosRecientesHTML(datosDashboard.gastos, periodo);
 
     // Re-render period-dependent charts
     destruirCharts();

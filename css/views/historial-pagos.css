@@ -416,6 +416,162 @@
 }
 
 /* =============================================================
+ * TAB 4: GASTOS - Registro y listado de gastos operativos
+ * ============================================================= */
+
+.pg-gastos {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  animation: fadeIn var(--transition-base) ease both;
+}
+
+.pg-gastos__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pg-gastos__divider {
+  border: none;
+  border-top: 1px solid var(--color-divider);
+  margin: var(--space-2) 0;
+}
+
+.pg-gastos__filtro {
+  margin-bottom: var(--space-1);
+}
+
+.pg-gastos__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding-bottom: calc(var(--bottom-nav-height) + 40px);
+}
+
+/* Card de gasto individual */
+.pg-gasto-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-base);
+  animation: fadeIn var(--transition-base) ease both;
+  overflow: hidden;
+}
+
+.pg-gasto-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--color-warning) 0%, var(--color-primary) 100%);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.pg-gasto-card:hover {
+  border-color: var(--color-warning);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 183, 77, 0.12);
+}
+
+.pg-gasto-card:hover::before {
+  opacity: 1;
+}
+
+/* Cabecera: categoria + monto */
+.pg-gasto-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* Badge de categoria */
+.pg-gasto-card__cat {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.pg-gasto-card__cat--hilos {
+  background: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.pg-gasto-card__cat--aceite {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+.pg-gasto-card__cat--repuestos {
+  background: var(--color-info-bg);
+  color: var(--color-info);
+}
+
+.pg-gasto-card__cat--servicios {
+  background: rgba(171, 71, 188, 0.12);
+  color: #ce93d8;
+}
+
+.pg-gasto-card__cat--otros {
+  background: rgba(90, 127, 160, 0.12);
+  color: var(--color-text-muted);
+}
+
+/* Monto */
+.pg-gasto-card__monto {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Descripcion */
+.pg-gasto-card__descripcion {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  line-height: 1.4;
+}
+
+/* Info: fecha y notas */
+.pg-gasto-card__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.pg-gasto-card__fecha {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.pg-gasto-card__notas {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-style: italic;
+}
+
+/* Acciones: eliminar */
+.pg-gasto-card__acciones {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* =============================================================
  * RESPONSIVE: TABLET (768px+)
  * ============================================================= */
 
@@ -448,7 +604,17 @@
     padding: var(--space-5) var(--space-6);
   }
 
+  .pg-gasto-card {
+    padding: var(--space-5) var(--space-6);
+  }
+
   .pg-historial__cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: var(--space-4);
+  }
+
+  .pg-gastos__cards {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: var(--space-4);
@@ -490,8 +656,17 @@
     transform: none;
   }
 
+  .pg-gasto-card {
+    cursor: default;
+  }
+
+  .pg-gasto-card:hover {
+    transform: none;
+  }
+
   .pg-resumen__cards,
-  .pg-historial__cards {
+  .pg-historial__cards,
+  .pg-gastos__cards {
     padding-bottom: var(--space-4);
   }
 }
