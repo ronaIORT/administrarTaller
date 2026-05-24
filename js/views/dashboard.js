@@ -137,15 +137,22 @@ function calcularIngresosMes(cortes, year, month) {
   return cortes.reduce(function (sum, c) {
     if (c.estado !== "terminado" || !c.fechaFinalizacion) return sum;
     if (!esMismoMes(c.fechaFinalizacion, year, month)) return sum;
-    return sum + c.cantidadPrendas * c.precioVentaUnitario;
+    const cantidadPrendas = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
+    return sum + cantidadPrendas * (c.precioVentaUnitario || 0);
   }, 0);
 }
 
-function calcularGastosMes(pagos, year, month) {
-  const centavos = pagos.reduce(function (sum, p) {
-    if (!esMismoMes(p.fecha, year, month)) return sum;
-    return sum + p.monto;
-  }, 0);
+function calcularManoObraRealMes(cortes, year, month) {
+  let centavos = 0;
+  cortes.forEach(function (c) {
+    if (c.estado !== "terminado" || !c.fechaFinalizacion) return;
+    if (!esMismoMes(c.fechaFinalizacion, year, month)) return;
+    (c.tareas || []).forEach(function (t) {
+      (t.asignaciones || []).forEach(function (a) {
+        centavos += (a.cantidad || 0) * (t.precioUnitario || 0);
+      });
+    });
+  });
   return centavosABolivianos(centavos);
 }
 
@@ -154,9 +161,11 @@ function calcularKPIs(datos) {
     return c.estado === "activo";
   }).length;
 
-  const ingresosMes = calcularIngresosMes(datos.cortes, new Date().getFullYear(), new Date().getMonth() + 1);
+  const year = new Date().getFullYear();
+  const month = new Date().getMonth() + 1;
 
-  const gastosMes = calcularGastosMes(datos.pagos, new Date().getFullYear(), new Date().getMonth() + 1);
+  const ingresosMes = calcularIngresosMes(datos.cortes, year, month);
+  const gastosMes = calcularManoObraRealMes(datos.cortes, year, month);
 
   return {
     cortesActivos: cortesActivos,
@@ -442,7 +451,7 @@ function renderChartGanancias(datos) {
 
   meses.forEach(function (m) {
     const ing = calcularIngresosMes(datos.cortes, m.year, m.month);
-    const gast = calcularGastosMes(datos.pagos, m.year, m.month);
+    const gast = calcularManoObraRealMes(datos.cortes, m.year, m.month);
     ingresos.push(ing);
     gastos.push(gast);
     ganancias.push(ing - gast);
@@ -577,16 +586,18 @@ function renderChartRentabilidad(datos) {
       return c.prendaId === prenda.id;
     });
 
-    const ing = cortesDePrenda
-      .filter(function (c) { return c.estado === "terminado"; })
-      .reduce(function (sum, c) {
-        return sum + c.cantidadPrendas * c.precioVentaUnitario;
-      }, 0);
-
-    const corteIds = cortesDePrenda.map(function (c) { return c.id; });
-    const gastoCentavos = datos.pagos
-      .filter(function (p) { return corteIds.includes(p.corteId); })
-      .reduce(function (sum, p) { return sum + p.monto; }, 0);
+    let ing = 0;
+    let gastoCentavos = 0;
+    cortesDePrenda.forEach(function (c) {
+      if (c.estado !== "terminado") return;
+      const cantidadPrendas = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
+      ing += cantidadPrendas * (c.precioVentaUnitario || 0);
+      (c.tareas || []).forEach(function (t) {
+        (t.asignaciones || []).forEach(function (a) {
+          gastoCentavos += (a.cantidad || 0) * (t.precioUnitario || 0);
+        });
+      });
+    });
     const gast = centavosABolivianos(gastoCentavos);
 
     labels.push(prenda.nombre);
