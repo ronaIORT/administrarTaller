@@ -4,7 +4,7 @@
 // actualización del service worker en clientes existentes.
 // ============================================================
 
-const CACHE_NAME = "taller-costura-v2.1";
+const CACHE_NAME = "taller-costura-v2.2";
 
 // ============================================================
 // ASSETS LOCALES - Pre-cacheados durante el evento install
@@ -59,19 +59,26 @@ const ASSETS_LOCALES = [
 // ============================================================
 
 self.addEventListener("install", (event) => {
-  console.log("[SW] Instalando y pre-cacheando " + ASSETS_LOCALES.length + " assets...");
+  console.log(
+    "[SW] Instalando y pre-cacheando " + ASSETS_LOCALES.length + " assets...",
+  );
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return Promise.allSettled(
-        ASSETS_LOCALES.map((url) =>
-          cache.add(url).catch((err) => {
-            console.warn("[SW] No se pudo pre-cachear:", url, err.message);
-          })
-        )
-      );
-    }).then(() => {
-      console.log("[SW] Pre-cache completado (algunos archivos pueden haber fallado)");
-    })
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => {
+        return Promise.allSettled(
+          ASSETS_LOCALES.map((url) =>
+            cache.add(url).catch((err) => {
+              console.warn("[SW] No se pudo pre-cachear:", url, err.message);
+            }),
+          ),
+        );
+      })
+      .then(() => {
+        console.log(
+          "[SW] Pre-cache completado (algunos archivos pueden haber fallado)",
+        );
+      }),
   );
 });
 
@@ -90,9 +97,9 @@ self.addEventListener("activate", (event) => {
           .map((name) => {
             console.log("[SW] Eliminando cache antiguo:", name);
             return caches.delete(name);
-          })
+          }),
       );
-    })
+    }),
   );
 });
 
@@ -131,38 +138,48 @@ self.addEventListener("fetch", (event) => {
       if (cached) return cached;
 
       // Cache miss: intentar red
-      return fetch(event.request).then((response) => {
-        // No cachear respuestas inválidas (excepto opaque de CDN no-cors)
-        if (!response || response.status !== 200) {
-          return response;
-        }
+      return fetch(event.request)
+        .then((response) => {
+          // No cachear respuestas inválidas (excepto opaque de CDN no-cors)
+          if (!response || response.status !== 200) {
+            return response;
+          }
 
-        // Cachear respuesta para futuros accesos
-        const responseClone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone);
-        });
-
-        return response;
-      }).catch(() => {
-        // Red no disponible (offline)
-        // Para peticiones de navegación, devolver index.html (SPA fallback)
-        if (event.request.mode === "navigate") {
-          return caches.match("./index.html") || caches.match("./");
-        }
-
-        // Para otros recursos (scripts, estilos, imágenes) sin cache ni red:
-        // devolver respuesta vacía para no romper la app
-        if (event.request.destination === "script" || event.request.destination === "style") {
-          return new Response("", {
-            status: 200,
-            headers: { "Content-Type": event.request.destination === "script" ? "application/javascript" : "text/css" }
+          // Cachear respuesta para futuros accesos
+          const responseClone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseClone);
           });
-        }
 
-        // Imágenes: respuesta vacía
-        return new Response("", { status: 200 });
-      });
-    })
+          return response;
+        })
+        .catch(() => {
+          // Red no disponible (offline)
+          // Para peticiones de navegación, devolver index.html (SPA fallback)
+          if (event.request.mode === "navigate") {
+            return caches.match("./index.html") || caches.match("./");
+          }
+
+          // Para otros recursos (scripts, estilos, imágenes) sin cache ni red:
+          // devolver respuesta vacía para no romper la app
+          if (
+            event.request.destination === "script" ||
+            event.request.destination === "style"
+          ) {
+            return new Response("", {
+              status: 200,
+              headers: {
+                "Content-Type":
+                  event.request.destination === "script"
+                    ? "application/javascript"
+                    : "text/css",
+              },
+            });
+          }
+
+          // Imágenes: respuesta vacía
+          return new Response("", { status: 200 });
+        });
+    }),
   );
 });

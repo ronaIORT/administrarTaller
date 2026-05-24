@@ -147,10 +147,9 @@ function calcularPagosRealesMes(pagos, year, month) {
   return centavosABolivianos(centavos);
 }
 
-function calcularManoObraEstimadaPorPrenda(cortes, prendaId) {
+function calcularManoObraEstimadaPorPrenda(cortes) {
   var centavos = 0;
   cortes.forEach(function (c) {
-    if (c.estado !== "terminado" || c.prendaId !== prendaId) return;
     (c.tareas || []).forEach(function (t) {
       (t.asignaciones || []).forEach(function (a) {
         centavos += (a.cantidad || 0) * (t.precioUnitario || 0);
@@ -219,16 +218,23 @@ function calcularTopCortes(cortes, prendasMap, periodo, n) {
     });
     var costos = costoCtv / 100;
     var prenda = prendasMap.get(c.prendaId);
+    var margen = ingresos > 0 ? ((ingresos - costos) / ingresos) * 100 : null;
     return {
       id: c.id,
       nombre: c.nombreCorte || ("Corte #" + c.id),
       prendaNombre: prenda ? prenda.nombre : "",
       ingresos: ingresos,
       costos: costos,
-      ganancia: ingresos - costos
+      ganancia: ingresos - costos,
+      margen: margen
     };
   });
-  resultados.sort(function (a, b) { return b.ganancia - a.ganancia; });
+  resultados.sort(function (a, b) {
+    if (a.margen === null && b.margen === null) return 0;
+    if (a.margen === null) return 1;
+    if (b.margen === null) return -1;
+    return b.margen - a.margen;
+  });
   return resultados.slice(0, n);
 }
 
@@ -820,7 +826,7 @@ function renderChartRentabilidad(datos, periodo) {
       var cantidad = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
       ing += cantidad * (c.precioVentaUnitario || 0);
     });
-    var gast = calcularManoObraEstimadaPorPrenda(cortesDePrenda, prenda.id);
+    var gast = calcularManoObraEstimadaPorPrenda(cortesDePrenda);
 
     labels.push(prenda.nombre);
     ingresosData.push(ing);
@@ -1159,7 +1165,7 @@ function renderChartTopCortes(datos, periodo) {
           }
         }
       },
-      plugins: {
+      plugins: Object.assign({}, getBarLineOptions().plugins, {
         legend: {
           position: "bottom",
           labels: {
@@ -1169,7 +1175,7 @@ function renderChartTopCortes(datos, periodo) {
             padding: 14
           }
         }
-      }
+      })
     })
   });
 }
@@ -1205,7 +1211,8 @@ function getBarLineOptions() {
           label: function (context) {
             var label = context.dataset.label || "";
             if (label) label += ": ";
-            return label + "Bs " + context.parsed.y.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+            var val = context.raw;
+            return label + "Bs " + (typeof val === "number" ? val.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",") : "0.00");
           }
         }
       }
