@@ -14,7 +14,7 @@ import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
 // ============================================================
 
 export function renderTabResumen(corte, container, opciones) {
-  const { prenda } = opciones;
+  const { prenda, trabajadoresMap } = opciones;
 
   const cantidadPrendas = corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0);
   const esTerminado = corte.estado === "terminado";
@@ -144,7 +144,7 @@ export function renderTabResumen(corte, container, opciones) {
 
   // Event listeners
   document.getElementById("btn-exportar-pdf-resumen").addEventListener("click", function () {
-    exportarPDF(corte, prenda);
+    exportarPDF(corte, prenda, trabajadoresMap);
   });
 
   if (!esTerminado) {
@@ -158,42 +158,101 @@ export function renderTabResumen(corte, container, opciones) {
 // EXPORTAR PDF - Genera reporte con jsPDF + AutoTable
 // ============================================================
 
-function exportarPDF(corte, prenda) {
+function exportarPDF(corte, prenda, trabajadoresMap) {
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
 
     const nombrePrenda = prenda ? prenda.nombre : "Sin prenda";
     const nombreCorte = corte.nombreCorte || "Sin nombre";
-    const cantidadPrendas = corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0);
+    const cantidadPrendas = (corte.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
+    const esTerminado = corte.estado === "terminado";
 
-    // Encabezado
-    doc.setFontSize(16);
-    doc.text("Reporte de Corte", 14, 20);
+    // --- Encabezado ---
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text("REPORTE DE CORTE", 14, 20);
     doc.setFontSize(11);
-    doc.text(nombrePrenda + " — " + nombreCorte, 14, 28);
-    doc.text("Unidades: " + cantidadPrendas + " | Estado: " + (corte.estado === "terminado" ? "Finalizado" : "Activo"), 14, 35);
+    doc.setFont(undefined, "normal");
+    doc.text(nombrePrenda + " \u2014 " + nombreCorte, 14, 30);
+    doc.setFontSize(10);
+    doc.text("Estado: " + (esTerminado ? "Finalizado" : "Activo"), 14, 38);
+    doc.text("Fecha inicio: " + formatearFecha(corte.fechaCreacion), 14, 45);
+    doc.text("Fecha fin: " + (esTerminado && corte.fechaFinalizacion ? formatearFecha(corte.fechaFinalizacion) : "En curso"), 14, 52);
 
-    // Tabla de tareas
-    const body = [];
+    const progreso = calcularProgreso(corte);
+    doc.text("Progreso: " + progreso + "%", 14, 59);
+
+    var y = 65;
+    doc.setDrawColor(180);
+    doc.line(14, y, 196, y);
+    y += 6;
+
+    // --- Seccion Tallas ---
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("TALLAS (" + (corte.tallas ? corte.tallas.length : 0) + ")", 14, y);
+    y += 7;
+
+    if (corte.tallas && corte.tallas.length > 0) {
+      const tallasBody = corte.tallas.map(function (t) {
+        return [t.talla, String(t.cantidad)];
+      });
+      doc.autoTable({
+        head: [["Talla", "Cantidad"]],
+        body: tallasBody,
+        startY: y,
+        theme: "grid",
+        styles: { fontSize: 9, cellPadding: 2 },
+        columnStyles: { 0: { cellWidth: 35 }, 1: { cellWidth: 35 } },
+        margin: { left: 14 },
+        tableWidth: 70,
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    // --- Separador ---
+    doc.setDrawColor(180);
+    doc.line(14, y, 196, y);
+    y += 6;
+
+    // --- Seccion Tareas ---
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("TAREAS", 14, y);
+    y += 7;
+
+    const tareasBody = [];
     (corte.tareas || []).forEach(function (t) {
       const asignados = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-      body.push([
+      const total = t.unidadesTotales || 0;
+      const pct = total > 0 ? Math.round((asignados / total) * 100) : 0;
+      tareasBody.push([
         t.nombre || "-",
         formatBs(t.precioUnitario || 0),
-        String(asignados) + " / " + String(t.unidadesTotales || 0)
+        String(asignados),
+        String(total),
+        pct + "%",
       ]);
     });
 
     doc.autoTable({
-      head: [["Tarea", "Precio/Unidad", "Asignado / Total"]],
-      body: body,
-      startY: 42,
+      head: [["Tarea", "Precio/Un.", "Hecho", "Total", "%"]],
+      body: tareasBody,
+      startY: y,
       theme: "grid",
-      styles: { fontSize: 9 }
+      styles: { fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 55 },
+        1: { cellWidth: 28, halign: "right" },
+        2: { cellWidth: 22, halign: "center" },
+        3: { cellWidth: 22, halign: "center" },
+        4: { cellWidth: 22, halign: "center" },
+      },
     });
+    y = doc.lastAutoTable.finalY + 6;
 
-    // Resumen financiero
+    // --- Calculos financieros ---
     const costoUnitarioCtv = (corte.tareas || []).reduce(function (s, t) { return s + (t.precioUnitario || 0); }, 0);
     const ventaTotalBs = (corte.precioVentaUnitario || 0) * cantidadPrendas;
 
@@ -203,13 +262,202 @@ function exportarPDF(corte, prenda) {
         manoObraRealCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
       });
     });
-    const gananciaRealBs = ventaTotalBs - centavosABolivianos(manoObraRealCtv);
+    const manoObraRealBs = centavosABolivianos(manoObraRealCtv);
+    const gananciaRealBs = ventaTotalBs - manoObraRealBs;
 
-    const finalY = doc.lastAutoTable.finalY + 10;
+    // --- Separador ---
+    doc.setDrawColor(180);
+    doc.line(14, y, 196, y);
+    y += 6;
+
+    // --- Seccion Resumen Financiero ---
+    doc.setFontSize(11);
+    doc.setFont(undefined, "bold");
+    doc.text("RESUMEN FINANCIERO", 14, y);
+    y += 8;
+
     doc.setFontSize(10);
-    doc.text("Venta total: " + ventaTotalBs.toFixed(2) + " Bs", 14, finalY);
-    doc.text("Mano de obra: " + centavosABolivianos(manoObraRealCtv).toFixed(2) + " Bs", 14, finalY + 7);
-    doc.text("Ganancia: " + gananciaRealBs.toFixed(2) + " Bs", 14, finalY + 14);
+    doc.setFont(undefined, "normal");
+
+    function dibujarFilaFinanciera(label, valor, esDestacado) {
+      doc.setFont(undefined, "normal");
+      doc.text(label, 14, y);
+      if (esDestacado) {
+        doc.setFont(undefined, "bold");
+        if (gananciaRealBs >= 0) {
+          doc.setTextColor(34, 139, 34);
+        } else {
+          doc.setTextColor(220, 38, 38);
+        }
+      } else {
+        doc.setTextColor(0, 0, 0);
+      }
+      doc.text(valor, 100, y);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont(undefined, "normal");
+      y += 7;
+    }
+
+    dibujarFilaFinanciera("Costo por prenda:", formatCostoTotal(costoUnitarioCtv));
+    dibujarFilaFinanciera("Precio venta unitario:", (corte.precioVentaUnitario || 0).toFixed(2) + " Bs");
+    dibujarFilaFinanciera("Venta total:", ventaTotalBs.toFixed(2) + " Bs");
+    y += 3;
+    doc.setDrawColor(180);
+    doc.line(14, y, 120, y);
+    y += 5;
+    dibujarFilaFinanciera("Mano de obra REAL:", manoObraRealBs.toFixed(2) + " Bs");
+    dibujarFilaFinanciera("Ganancia REAL:", gananciaRealBs.toFixed(2) + " Bs", true);
+
+    y += 3;
+
+    // --- Agrupar asignaciones por trabajador ---
+    const agrupado = {};
+    (corte.tareas || []).forEach(function (tarea) {
+      (tarea.asignaciones || []).forEach(function (a) {
+        const tid = a.trabajadorId;
+        if (!agrupado[tid]) {
+          agrupado[tid] = { tareas: [], totalCtv: 0 };
+        }
+        var tareaAgrupada = agrupado[tid].tareas.find(function (ta) {
+          return ta.tareaNombre === (tarea.nombre || "Sin nombre");
+        });
+        if (!tareaAgrupada) {
+          tareaAgrupada = {
+            tareaNombre: tarea.nombre || "Sin nombre",
+            precioUnitario: tarea.precioUnitario || 0,
+            tallas: [],
+            totalCtv: 0,
+          };
+          agrupado[tid].tareas.push(tareaAgrupada);
+        }
+        const subtotal = (a.cantidad || 0) * (tarea.precioUnitario || 0);
+        const totalCorte = ((corte.tallas || []).find(function (ct) { return ct.talla === a.talla; }) || {}).cantidad || 0;
+        tareaAgrupada.tallas.push({
+          nombre: a.talla || "-",
+          cantidadAsignada: a.cantidad || 0,
+          totalCorte: totalCorte,
+        });
+        tareaAgrupada.totalCtv += subtotal;
+        agrupado[tid].totalCtv += subtotal;
+      });
+    });
+
+    const trabajadoresIds = Object.keys(agrupado);
+
+    if (trabajadoresIds.length > 0) {
+      if (y > 230) {
+        doc.addPage();
+        y = 20;
+      }
+
+      // --- Separador ---
+      doc.setDrawColor(180);
+      doc.line(14, y, 196, y);
+      y += 6;
+
+      // --- Seccion Desglose por Trabajador ---
+      doc.setFontSize(11);
+      doc.setFont(undefined, "bold");
+      doc.text("DESGLOSE POR TRABAJADOR", 14, y);
+      y += 8;
+
+      const todasTallasCorte = (corte.tallas || []).map(function (ct) { return ct.talla; });
+
+      trabajadoresIds.forEach(function (tid) {
+        const datos = agrupado[tid];
+        const nombreTrab = trabajadoresMap[parseInt(tid)] || "Trabajador " + tid;
+        const totalTrabBs = centavosABolivianos(datos.totalCtv);
+
+        if (y > 240) {
+          doc.addPage();
+          y = 20;
+        }
+
+        doc.setFontSize(10);
+        doc.setFont(undefined, "bold");
+        doc.text(nombreTrab + " \u2014 Total: " + totalTrabBs.toFixed(2) + " Bs", 14, y);
+        y += 7;
+
+        const tareasBody = datos.tareas.map(function (tarea) {
+          const tallasAsignadasMap = {};
+          tarea.tallas.forEach(function (t) {
+            tallasAsignadasMap[t.nombre] = t;
+          });
+
+          var todasCompletas = true;
+          todasTallasCorte.forEach(function (tallaNombre) {
+            var ct = (corte.tallas || []).find(function (ct) { return ct.talla === tallaNombre; });
+            var asignada = tallasAsignadasMap[tallaNombre];
+            if (!asignada || asignada.cantidadAsignada !== ct.cantidad) {
+              todasCompletas = false;
+            }
+          });
+
+          var tallasStr;
+          if (todasCompletas) {
+            tallasStr = "Completo.";
+          } else {
+            var partes = [];
+            tarea.tallas.forEach(function (t) {
+              if (t.cantidadAsignada === t.totalCorte) {
+                partes.push(t.nombre);
+              } else {
+                partes.push(t.nombre + "(" + t.cantidadAsignada + "/" + t.totalCorte + ")");
+              }
+            });
+            tallasStr = partes.join(", ") + ".";
+          }
+
+          const subtotalBs = centavosABolivianos(tarea.totalCtv);
+          return [tarea.tareaNombre, tallasStr, subtotalBs.toFixed(2) + " Bs"];
+        });
+
+        doc.autoTable({
+          head: [["Tarea", "Tallas", "Subtotal"]],
+          body: tareasBody,
+          startY: y,
+          theme: "grid",
+          styles: { fontSize: 8, cellPadding: 2 },
+          columnStyles: {
+            0: { cellWidth: 55 },
+            1: { cellWidth: 82 },
+            2: { cellWidth: 38, halign: "right" },
+          },
+          margin: { left: 14 },
+        });
+        y = doc.lastAutoTable.finalY + 5;
+      });
+
+      // Total general de mano de obra
+      var totalGeneralCtv = 0;
+      trabajadoresIds.forEach(function (tid) {
+        totalGeneralCtv += agrupado[tid].totalCtv;
+      });
+
+      if (y > 265) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setDrawColor(180);
+      doc.line(14, y, 196, y);
+      y += 5;
+
+      doc.setFontSize(10);
+      doc.setFont(undefined, "bold");
+      doc.text("Total mano de obra: " + centavosABolivianos(totalGeneralCtv).toFixed(2) + " Bs", 14, y);
+      y += 10;
+    }
+
+    // --- Footer ---
+    doc.setDrawColor(180);
+    doc.line(14, y, 196, y);
+    y += 5;
+
+    doc.setFontSize(8);
+    doc.setFont(undefined, "normal");
+    doc.setTextColor(130);
+    doc.text("Generado el " + formatearFecha(new Date().toISOString()) + " \u2014 App de Gestion de Cortes", 14, y);
 
     doc.save("corte-" + (corte.nombreCorte || "reporte").replace(/\s+/g, "-") + ".pdf");
     mostrarToast("PDF exportado", "success");

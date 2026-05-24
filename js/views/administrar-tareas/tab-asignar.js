@@ -1088,5 +1088,7 @@ function confirmarEliminarAsignacion(corte, seleccion, onDataChange) {
         mostrarToast("Error al eliminar", "error");
       }
     },
+    undefined,
+    "Eliminar"
   );
 }

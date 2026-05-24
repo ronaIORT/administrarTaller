@@ -714,7 +714,9 @@ function confirmarEliminarTarea(corte, idx) {
         console.error("Error al eliminar tarea:", err);
         mostrarToast("Error al eliminar", "error");
       }
-    }
+    },
+    undefined,
+    "Eliminar"
   );
 }
 

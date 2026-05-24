@@ -236,35 +236,92 @@ function compartirWebShare(corte, datosTrab, nombreTrab) {
 function generarTextoFormateado(corte, datosTrab, nombreTrab) {
   const nombreCorte = corte.nombreCorte || "Sin nombre";
   const totalBs = centavosABolivianos(datosTrab.totalCtv);
+  const sep = "────────────────────";
 
-  let texto = "🧵 *Corte: " + nombreCorte + "*\n";
-  texto += "👤 *Trabajador: " + (nombreTrab || "Sin nombre") + "*\n";
-  texto += "📋 Tareas asignadas:\n";
+  // Info del corte
+  const totalUnidades = (corte.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
+  const cantidadTallas = (corte.tallas || []).length;
 
-  datosTrab.tareas.forEach(function (tarea) {
-    tarea.tallas.forEach(function (t) {
-      const subtotalTalla = t.cantidadAsignada * tarea.precioUnitario;
-      texto +=
-        "  • " +
-        tarea.tareaNombre +
-        " — " +
-        t.cantidadAsignada +
-        "/" +
-        t.totalCorte +
-        " unid. × " +
-        tarea.precioUnitario +
-        " ctv = " +
-        subtotalTalla +
-        " ctv";
-      if (t.nombre && t.nombre !== "-") {
-        texto += " (" + t.nombre + ")";
-      }
-      texto += "\n";
-    });
+  let texto = sep + "\n";
+  texto += "👤 *Trabajador:* " + (nombreTrab || "Sin nombre") + "\n";
+  texto += "📦 *Corte:* " + nombreCorte + "\n";
+  texto += "📊 *Unidades del corte:* " + totalUnidades + "\n";
+  texto += "📊 *Tallas:* " + cantidadTallas + "\n";
+
+  (corte.tallas || []).forEach(function (t) {
+    texto += "- *" + t.talla + "* = " + t.cantidad + "\n";
   });
 
-  texto +=
-    "💰 Total: " + datosTrab.totalCtv + " ctv (" + totalBs.toFixed(2) + " Bs)";
+  texto += "\n";
+
+  // Fechas
+  texto += "📅 *Fecha Inicio:* " + formatearFecha(corte.fechaCreacion) + "\n";
+  if (corte.estado === "terminado" && corte.fechaFinalizacion) {
+    texto += "📅 *Fecha Fin:* " + formatearFecha(corte.fechaFinalizacion) + "\n";
+  } else {
+    texto += "📅 *Fecha Fin:* En progreso\n";
+  }
+
+  texto += "\n";
+
+  // Tareas asignadas
+  texto += "📊 *TAREAS ASIGNADAS:*\n";
+
+  const todasTallasCorte = (corte.tallas || []).map(function (ct) { return ct.talla; });
+
+  datosTrab.tareas.forEach(function (tarea) {
+    const tareaTotalBs = centavosABolivianos(tarea.totalCtv);
+
+    // Determinar si todas las tallas del corte estan completas para esta tarea
+    const tallasAsignadasMap = {};
+    tarea.tallas.forEach(function (t) {
+      tallasAsignadasMap[t.nombre] = t;
+    });
+
+    var todasCompletas = true;
+    todasTallasCorte.forEach(function (tallaNombre) {
+      var ct = (corte.tallas || []).find(function (ct) { return ct.talla === tallaNombre; });
+      var asignada = tallasAsignadasMap[tallaNombre];
+      if (!asignada || asignada.cantidadAsignada !== ct.cantidad) {
+        todasCompletas = false;
+      }
+    });
+
+    var tallasStr;
+    if (todasCompletas) {
+      tallasStr = "Completo.";
+    } else {
+      var partes = [];
+      tarea.tallas.forEach(function (t) {
+        if (t.cantidadAsignada === t.totalCorte) {
+          partes.push(t.nombre);
+        } else {
+          partes.push(t.nombre + "(" + t.cantidadAsignada + "/" + t.totalCorte + ")");
+        }
+      });
+      tallasStr = partes.join(", ") + ".";
+    }
+
+    texto += "• *" + tarea.tareaNombre + ":* " + tallasStr + " - *" + tareaTotalBs.toFixed(2) + "Bs*\n";
+  });
+
+  texto += "\n";
+  texto += "💰 *TOTAL " + (nombreTrab || "Sin nombre") + ":* " + totalBs.toFixed(2) + "Bs\n";
+  texto += sep + "\n";
+  texto += "📱 Generado desde la App de Gestión de Cortes";
 
   return texto;
+}
+
+// ============================================================
+// FORMATEO DE FECHA
+// ============================================================
+
+function formatearFecha(fechaISO) {
+  if (!fechaISO) return "-";
+  const fecha = new Date(fechaISO);
+  const dia = String(fecha.getDate()).padStart(2, "0");
+  const mes = String(fecha.getMonth() + 1).padStart(2, "0");
+  const anio = fecha.getFullYear();
+  return dia + "/" + mes + "/" + anio;
 }

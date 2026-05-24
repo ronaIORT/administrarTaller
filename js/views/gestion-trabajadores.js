@@ -484,6 +484,8 @@ async function confirmarEliminar(id, nombre) {
         console.error("Error al eliminar:", err);
         mostrarToast("Error al eliminar", "error");
       }
-    }
+    },
+    undefined,
+    "Eliminar"
   );
 }

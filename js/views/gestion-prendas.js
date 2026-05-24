@@ -471,14 +471,18 @@ async function confirmarEliminarPrenda(id, nombre) {
         console.error("Error al eliminar:", err);
         mostrarToast("Error al eliminar", "error");
       }
-    }
+    },
+    undefined,
+    "Eliminar"
   );
 }
 
 // ============================================================
 // IMPORTADOR EXCEL - Importa prendas desde archivo .xlsx/.csv
-// Formato esperado: columna 1 = nombre, columnas 2+ = pares
-// (nombre tarea, precio). Usa SheetJS para parsear el archivo.
+// Una prenda por hoja/pestana. Formato de cada hoja:
+//   Col A = nombre de tarea, Col B = precio en centavos.
+//   El nombre de la prenda se toma de A1 (si B1 no es numero)
+//   o del nombre de la pestana. SheetJS para parsear el archivo.
 // ============================================================
 
 function abrirImportadorExcel() {
@@ -488,29 +492,31 @@ function abrirImportadorExcel() {
   input.hidden = true;
   document.body.appendChild(input);
 
-  input.addEventListener("change", async (e) => {
+  input.addEventListener("change", async function (e) {
     document.body.removeChild(input);
     const file = e.target.files[0];
     if (!file) return;
 
     try {
-      const data = await readFile(file);
-      const rows = parseExcelRows(data);
-      const validas = rows.filter((r) => r.nombre && r.nombre.trim());
+      const workbook = await leerWorkbook(file);
+      const prendaObjs = [];
 
-      if (validas.length === 0) {
+      workbook.SheetNames.forEach(function (sheetName) {
+        const sheet = workbook.Sheets[sheetName];
+        const prenda = parseSheetToPrenda(sheetName, sheet);
+        if (prenda) {
+          prendaObjs.push(prenda);
+        }
+      });
+
+      if (prendaObjs.length === 0) {
         mostrarToast("No se encontraron prendas validas en el archivo", "warning");
         return;
       }
 
-      const prendaObjs = validas.map((r) => ({
-        nombre: r.nombre.trim(),
-        tareas: r.tareas || []
-      }));
-
       await db.prendas.bulkAdd(prendaObjs);
       await cargarPrendas();
-      mostrarToast(`${prendaObjs.length} prenda(s) importada(s)`, "success");
+      mostrarToast(prendaObjs.length + " prenda(s) importada(s)", "success");
     } catch (err) {
       console.error("Error importando:", err);
       mostrarToast("Error al importar archivo", "error");
@@ -520,15 +526,13 @@ function abrirImportadorExcel() {
   input.click();
 }
 
-function readFile(file) {
-  return new Promise((resolve, reject) => {
+function leerWorkbook(file) {
+  return new Promise(function (resolve, reject) {
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = function (e) {
       try {
         const workbook = XLSX.read(e.target.result, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
-        resolve(data);
+        resolve(workbook);
       } catch (err) {
         reject(err);
       }
@@ -538,32 +542,80 @@ function readFile(file) {
   });
 }
 
-// Parsea filas del Excel: col A = nombre, cols B+ = pares tarea/precio.
-// Preserva precios como enteros (centavos) usando Math.round.
-function parseExcelRows(data) {
-  const results = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
+// Parsea una hoja como una sola prenda.
+// Nombre de la prenda: si A1 tiene texto y B1 no es numerico → A1 es el nombre
+// de la prenda y las tareas empiezan en la fila 2. Si no → nombre de la pestana
+// y las tareas empiezan en la fila 1.
+// Si la primera fila de tareas tiene texto no numerico en B (cabecera), se descarta.
+function parseSheetToPrenda(sheetName, sheet) {
+  const rawData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+  // Filtrar filas completamente vacias
+  const rows = [];
+  for (let i = 0; i < rawData.length; i++) {
+    const row = rawData[i];
     if (!row || row.length === 0) continue;
+    const tieneContenido = row.some(function (cell) {
+      return cell !== null && cell !== undefined && String(cell).trim() !== "";
+    });
+    if (!tieneContenido) continue;
+    rows.push(row);
+  }
 
-    const nombre = String(row[0] || "").trim();
-    if (!nombre) continue;
+  if (rows.length === 0) return null;
 
-    const tareas = [];
-    for (let j = 1; j < row.length; j += 2) {
-      const tareaNombre = String(row[j] || "").trim();
-      const tareaPrecio = parseFloat(row[j + 1]) || 0;
-      if (tareaNombre) {
-        tareas.push({
-          nombre: tareaNombre,
-          precioUnitario: Math.round(tareaPrecio)
-        });
+  var prendaName = null;
+  var startIdx = 0;
+
+  // Determinar si la primera fila contiene el nombre de la prenda
+  const firstRow = rows[0];
+  const colA = String(firstRow[0] || "").trim();
+  const colB = firstRow[1];
+  const bEsVacio = colB === undefined || colB === null || String(colB).trim() === "";
+  const bEsNumerico = !bEsVacio && !isNaN(parseFloat(colB));
+
+  if (colA && !bEsNumerico) {
+    prendaName = colA;
+    startIdx = 1;
+  }
+
+  if (!prendaName) {
+    prendaName = sheetName;
+  }
+
+  // Detectar fila de cabecera (B no es numerico → texto como "Precio")
+  var taskStartIdx = startIdx;
+  if (taskStartIdx < rows.length) {
+    var firstTaskRow = rows[taskStartIdx];
+    var firstTaskB = firstTaskRow[1];
+    if (firstTaskB !== undefined && firstTaskB !== null) {
+      var bStr = String(firstTaskB).trim();
+      if (bStr !== "" && isNaN(parseFloat(bStr))) {
+        taskStartIdx++;
       }
     }
-
-    results.push({ nombre, tareas });
   }
-  return results;
+
+  // Parsear tareas
+  const tareas = [];
+  for (let i = taskStartIdx; i < rows.length; i++) {
+    const row = rows[i];
+    const tareaNombre = String(row[0] || "").trim();
+    if (!tareaNombre) continue;
+
+    const tareaPrecio = Math.round(parseFloat(row[1]) || 0);
+    tareas.push({
+      nombre: tareaNombre,
+      precioUnitario: tareaPrecio,
+    });
+  }
+
+  if (tareas.length === 0) return null;
+
+  return {
+    nombre: prendaName,
+    tareas: tareas,
+  };
 }
 
 // ============================================================

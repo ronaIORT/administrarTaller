@@ -171,6 +171,8 @@ async function confirmarEliminarPago(pagoId, pagos, trabajadoresMap, onPagoElimi
         console.error("Error al eliminar pago:", err);
         mostrarToast("Error al eliminar", "error");
       }
-    }
+    },
+    undefined,
+    "Eliminar"
   );
 }

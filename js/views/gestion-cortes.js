@@ -314,6 +314,8 @@ async function confirmarEliminarCorte(id, nombre) {
         console.error("Error al eliminar corte:", err);
         mostrarToast("Error al eliminar", "error");
       }
-    }
+    },
+    undefined,
+    "Eliminar"
   );
 }

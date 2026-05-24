@@ -257,6 +257,7 @@ function renderTabActivo() {
     case "resumen":
       renderTabResumen(corteActual, tabContentEl, {
         prenda: prendaActual,
+        trabajadoresMap: trabajadoresMap,
         onFinalizar: function () {
           return recargarCorte();
         },
