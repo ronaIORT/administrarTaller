@@ -195,7 +195,8 @@ function buildDashboardHTML(datos) {
     buildChartsRowHTML(datos) +
     buildProgresoHTML(datos.cortes) +
     buildCortesRecientesHTML(datos.cortes, prendasMap) +
-    buildPagosRecientesHTML(datos.pagos, datos.cortes, trabajadoresMap);
+    buildPagosRecientesHTML(datos.pagos, datos.cortes, trabajadoresMap) +
+    '<div class="app-version">v1.4</div>';
 }
 
 function buildKPICardsHTML(kpis) {

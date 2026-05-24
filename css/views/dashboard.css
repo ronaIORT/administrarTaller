@@ -217,3 +217,12 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ----- VERSION ----- */
+.app-version {
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  padding: var(--space-4) 0 var(--space-6);
+  opacity: 0.5;
+}

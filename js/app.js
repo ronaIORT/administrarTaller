@@ -33,26 +33,32 @@ function init() {
   });
 }
 
+// Flag para distinguir si controllerchange fue disparado por el
+// usuario (clic en "Recargar"). Solo se recarga si fue solicitado.
+var swActualizacionPendiente = false;
+
 function registrarServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
+
   navigator.serviceWorker
     .register("service-worker.js")
     .then((reg) => {
       console.log("SW registrado:", reg.scope);
 
-      // Detectar actualización pendiente (SW en espera)
-      if (reg.waiting) {
+      // Detectar actualizacion pendiente SOLO si ya hay un SW controlando
+      // (actualizacion genuina, no primera instalacion)
+      if (reg.waiting && navigator.serviceWorker.controller) {
         mostrarBannerActualizacion();
       }
 
-      // Escuchar nueva actualización
+      // Escuchar nueva actualizacion
       reg.addEventListener("updatefound", function () {
         const newSW = reg.installing;
         if (!newSW) return;
 
         newSW.addEventListener("statechange", function () {
           if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-            console.log("[SW] Nueva versión lista para activar");
+            console.log("[SW] Nueva version lista para activar");
             mostrarBannerActualizacion();
           }
         });
@@ -60,10 +66,14 @@ function registrarServiceWorker() {
     })
     .catch((err) => console.error("SW error:", err));
 
-  // También escuchar cambios de estado via controllerchange
+  // Escuchar cambios de estado via controllerchange.
+  // Solo recargar si fue una actualizacion solicitada por el usuario.
   navigator.serviceWorker.addEventListener("controllerchange", function () {
-    console.log("[SW] Controller cambiado, recargando...");
-    window.location.reload();
+    if (swActualizacionPendiente) {
+      swActualizacionPendiente = false;
+      console.log("[SW] Controller cambiado, recargando...");
+      window.location.reload();
+    }
   });
 }
 
@@ -85,6 +95,7 @@ function mostrarBannerActualizacion() {
 
   banner.querySelector("#btn-recargar-sw").addEventListener("click", function () {
     banner.remove();
+    swActualizacionPendiente = true;
     // Forzar activación del SW en espera
     if (navigator.serviceWorker.controller) {
       navigator.serviceWorker.getRegistration().then(function (reg) {

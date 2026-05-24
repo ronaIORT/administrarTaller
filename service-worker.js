@@ -4,7 +4,7 @@
 // actualización del service worker en clientes existentes.
 // ============================================================
 
-const CACHE_NAME = "taller-costura-v1.0";
+const CACHE_NAME = "taller-costura-v1.4";
 
 // ============================================================
 // ASSETS LOCALES - Pre-cacheados durante el evento install
@@ -49,9 +49,7 @@ const ASSETS_LOCALES = [
   "./js/views/gestion-pagos/tab-registrar.js",
   "./js/views/gestion-pagos/tab-resumen.js",
   "./icons/icon-192x192.png",
-  "./icons/icon-192x192.svg",
   "./icons/icon-512x512.png",
-  "./icons/icon-512x512.svg",
 ];
 
 // ============================================================
@@ -64,17 +62,23 @@ self.addEventListener("install", (event) => {
   console.log("[SW] Instalando y pre-cacheando " + ASSETS_LOCALES.length + " assets...");
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_LOCALES);
-    }).catch((err) => {
-      console.error("[SW] Error durante pre-cache:", err);
+      return Promise.allSettled(
+        ASSETS_LOCALES.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn("[SW] No se pudo pre-cachear:", url, err.message);
+          })
+        )
+      );
+    }).then(() => {
+      console.log("[SW] Pre-cache completado (algunos archivos pueden haber fallado)");
     })
   );
-  self.skipWaiting();
 });
 
 // ============================================================
-// ACTIVATE - Limpia caches de versiones anteriores
-// clients.claim() hace que la app sea controlada inmediatamente.
+// ACTIVATE - Limpia caches de versiones anteriores.
+// Sin clients.claim(): el SW controla en la siguiente carga de pagina,
+// evitando recargas innecesarias en la primera instalacion.
 // ============================================================
 
 self.addEventListener("activate", (event) => {
@@ -90,7 +94,6 @@ self.addEventListener("activate", (event) => {
       );
     })
   );
-  self.clients.claim();
 });
 
 // ============================================================
@@ -130,7 +133,7 @@ self.addEventListener("fetch", (event) => {
       // Cache miss: intentar red
       return fetch(event.request).then((response) => {
         // No cachear respuestas inválidas (excepto opaque de CDN no-cors)
-        if (!response || (response.status !== 200 && response.type !== "opaque")) {
+        if (!response || response.status !== 200) {
           return response;
         }
 
