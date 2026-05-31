@@ -5,24 +5,23 @@
 
 :root {
     /* ----- COLORES ----- */
-    --color-bg: #0a1628;
-    --color-surface: #0f2744;
-    --color-surface-variant: #163557;
-    /*--color-primary: #4da6ff;  -- azul original */
-    --color-primary: #09af4d; /* verde actual */
-    --color-primary-variant: #3d8ae0;
-    --color-primary-bg: rgba(77, 166, 255, 0.12);
-    --color-text: #d4e5f7;
-    --color-text-secondary: #8fb8d8;
-    --color-text-muted: #5a7fa0;
-    --color-border: #1e3a5f;
-    --color-divider: #163557;
+    --color-bg: #0c0a14;
+    --color-surface: #161222;
+    --color-surface-variant: #1f1a30;
+    --color-primary: #a78bfa;
+    --color-primary-variant: #c4b5fd;
+    --color-primary-bg: rgba(167, 139, 250, 0.12);
+    --color-text: #f0ecf8;
+    --color-text-secondary: #a89cc0;
+    --color-text-muted: #6a5e80;
+    --color-border: #2a2440;
+    --color-divider: #2a2440;
     --color-error: #ef5350;
     --color-error-bg: rgba(239, 83, 80, 0.12);
     --color-success: #66bb6a;
     --color-success-bg: rgba(102, 187, 106, 0.12);
-    --color-warning: #ffb74d;
-    --color-warning-bg: rgba(255, 183, 77, 0.12);
+    --color-warning: #fbbf24;
+    --color-warning-bg: rgba(251, 191, 36, 0.12);
     --color-info: #42a5f5;
     --color-info-bg: rgba(66, 165, 245, 0.12);
 

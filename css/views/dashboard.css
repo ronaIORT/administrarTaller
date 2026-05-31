@@ -1,6 +1,6 @@
 /* ============================================================
    DASHBOARD v2.0 — KPIs, charts, resúmenes con período global
-   Tema oscuro premium con acentos verdes y tipografía refinada
+   Tema oscuro premium con acentos violetas y tipografía refinada
    ============================================================ */
 
 /* ----- PERIOD SELECTOR — Sticky bar ----- */
@@ -10,10 +10,10 @@
   z-index: 20;
   padding: var(--space-3) var(--space-4);
   margin: -1rem -1rem var(--space-4);
-  background: linear-gradient(180deg, var(--color-bg) 60%, rgba(10, 22, 40, 0.92));
+  background: linear-gradient(180deg, var(--color-bg) 60%, rgba(12, 10, 20, 0.92));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(9, 175, 77, 0.08);
+  border-bottom: 1px solid rgba(167, 139, 250, 0.08);
 }
 
 .dash-period-chips {
@@ -33,7 +33,7 @@
 }
 
 .dash-period-chips .filter-chip.active {
-  box-shadow: 0 0 16px rgba(9, 175, 77, 0.25);
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.25);
 }
 
 /* ----- KPI CARDS — Grid 2×4 ----- */
@@ -46,7 +46,7 @@
 
 .kpi-card {
   position: relative;
-  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(15, 39, 68, 0.6) 100%);
+  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(30, 20, 50, 0.6) 100%);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
@@ -82,7 +82,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(9, 175, 77, 0.12);
+  background: rgba(167, 139, 250, 0.12);
   color: var(--color-primary);
 }
 
@@ -92,7 +92,7 @@
 }
 
 .kpi-card--positive .kpi-card__icon {
-  background: rgba(9, 175, 77, 0.15);
+  background: rgba(167, 139, 250, 0.15);
   color: var(--color-success);
 }
 
@@ -174,7 +174,7 @@
 }
 
 .dash-section__link:hover {
-  color: #0dc95d;
+  color: #c4b5fd;
 }
 
 /* ----- CHARTS LAYOUT ----- */
@@ -209,7 +209,7 @@
 .cash-summary {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, rgba(15, 39, 68, 0.8) 0%, rgba(22, 53, 87, 0.6) 100%);
+  background: linear-gradient(135deg, rgba(30, 20, 50, 0.8) 0%, rgba(40, 30, 60, 0.6) 100%);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
@@ -225,7 +225,7 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(ellipse at 20% 50%, rgba(9, 175, 77, 0.04) 0%, transparent 50%),
+  background: radial-gradient(ellipse at 20% 50%, rgba(167, 139, 250, 0.04) 0%, transparent 50%),
               radial-gradient(ellipse at 80% 50%, rgba(239, 83, 80, 0.04) 0%, transparent 50%);
   pointer-events: none;
 }
@@ -336,7 +336,7 @@
 
 .dash-progress-item .progress-bar__fill {
   border-radius: 3px;
-  background: linear-gradient(90deg, var(--color-primary), #0dc95d);
+  background: linear-gradient(90deg, var(--color-primary), #f472b6);
   transition: width 0.6s cubic-bezier(0.22, 0.61, 0.36, 1);
 }
 

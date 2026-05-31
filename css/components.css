@@ -22,7 +22,7 @@
 
 .btn--primary {
   background-color: var(--color-primary);
-  color: #1a1a1a;
+  color: #0c0a14;
 }
 
 .btn--primary:hover {
@@ -103,7 +103,7 @@
   padding: 0;
   border-radius: 50%;
   background-color: var(--color-primary);
-  color: #1a1a1a;
+  color: #0c0a14;
   box-shadow: var(--shadow-md);
   z-index: 90;
   display: flex;
@@ -131,7 +131,7 @@
   cursor: pointer;
   box-shadow: var(--shadow-md);
   transition: all var(--transition-base);
-  color: #1a1a1a;
+  color: #0c0a14;
 }
 
 .fab-btn:hover {

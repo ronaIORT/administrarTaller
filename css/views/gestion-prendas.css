@@ -46,7 +46,7 @@
 .prenda-card:hover {
   border-color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(9, 175, 77, 0.12);
+  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.12);
 }
 
 .prenda-card:hover::before {
@@ -59,8 +59,8 @@
 
 .prenda-card.selected {
   border-color: var(--color-primary);
-  background: linear-gradient(135deg, var(--color-surface-variant) 0%, rgba(9, 175, 77, 0.08) 100%);
-  box-shadow: 0 4px 20px rgba(9, 175, 77, 0.18);
+  background: linear-gradient(135deg, var(--color-surface-variant) 0%, rgba(167, 139, 250, 0.08) 100%);
+  box-shadow: 0 4px 20px rgba(167, 139, 250, 0.18);
 }
 
 .prenda-card.selected::before {
@@ -195,7 +195,7 @@
 }
 
 .fab-duplicate:hover {
-  background-color: #ffa726;
+  background-color: #fbbf24;
 }
 
 .tareas-section-header {
@@ -392,7 +392,7 @@
   cursor: pointer;
   box-shadow: var(--shadow-md);
   transition: all var(--transition-base);
-  color: #1a1a1a;
+  color: #0c0a14;
 }
 
 .tarea-fab-btn:hover {
@@ -417,7 +417,7 @@
 }
 
 .tarea-fab-add:hover {
-  background-color: #1e88e5;
+  background-color: #818cf8;
 }
 
 .tarea-fab-delete {

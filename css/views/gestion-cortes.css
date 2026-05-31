@@ -58,11 +58,11 @@
   color: var(--color-text);
 }
 
-/* Chip activo: fondo verde solido, texto oscuro para contraste */
+/* Chip activo: fondo violeta solido, texto oscuro para contraste */
 .filter-chip.active {
   background-color: var(--color-primary);
   border-color: var(--color-primary);
-  color: #1a1a1a;
+  color: #0c0a14;
 }
 
 /* ----- LISTA DE CORTES ----- */
@@ -76,7 +76,7 @@
 
 /* ----- CARD DE CORTE ----- */
 /* Mismo patron visual que prenda-card y trabajador-card:
-   gradiente sutil, borde con acento verde al hover, animacion fadeIn. */
+   gradiente sutil, borde con acento violeta al hover, animacion fadeIn. */
 
 .corte-card {
   position: relative;
@@ -109,7 +109,7 @@
 .corte-card:hover {
   border-color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(9, 175, 77, 0.12);
+  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.12);
 }
 
 .corte-card:hover::before {
@@ -165,7 +165,7 @@
 
 /* ----- BARRA DE PROGRESO ----- */
 /* Disenada para usarse tambien en Fase 5 (detalle de corte).
-   El relleno usa gradiente verde con transicion elastica.
+   El relleno usa gradiente violeta con transicion elastica.
    El modificador --completo cambia a tono success. */
 
 .progress-bar {
@@ -177,7 +177,7 @@
 
 .progress-bar__fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), #0dd85e);
+  background: linear-gradient(90deg, var(--color-primary), #c4b5fd);
   border-radius: 3px;
   transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }

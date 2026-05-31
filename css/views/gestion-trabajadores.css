@@ -30,16 +30,16 @@
 
 .trabajadores-form-input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-bg), 0 2px 8px rgba(9, 175, 77, 0.1);
+  box-shadow: 0 0 0 3px var(--color-primary-bg), 0 2px 8px rgba(167, 139, 250, 0.1);
 }
 
 .trabajadores-add-btn {
   transition: all var(--transition-base);
-  box-shadow: 0 2px 8px rgba(9, 175, 77, 0.2);
+  box-shadow: 0 2px 8px rgba(167, 139, 250, 0.2);
 }
 
 .trabajadores-add-btn:hover {
-  box-shadow: 0 4px 16px rgba(9, 175, 77, 0.3);
+  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.3);
   transform: scale(1.05);
 }
 
@@ -80,7 +80,7 @@
 .trabajador-card:hover {
   border-color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(9, 175, 77, 0.12);
+  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.12);
 }
 
 .trabajador-card:hover::before {
@@ -93,8 +93,8 @@
 
 .trabajador-card.selected {
   border-color: var(--color-primary);
-  background: linear-gradient(135deg, var(--color-surface-variant) 0%, rgba(9, 175, 77, 0.08) 100%);
-  box-shadow: 0 4px 20px rgba(9, 175, 77, 0.18);
+  background: linear-gradient(135deg, var(--color-surface-variant) 0%, rgba(167, 139, 250, 0.08) 100%);
+  box-shadow: 0 4px 20px rgba(167, 139, 250, 0.18);
 }
 
 .trabajador-card.selected::before {

@@ -247,7 +247,7 @@
   justify-content: space-between;
   padding: var(--space-3) var(--space-4);
   background-color: var(--color-primary);
-  color: #0a1628;
+  color: #1a1028;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   animation: slideDown 250ms ease forwards;
@@ -262,7 +262,7 @@
   padding: var(--space-1) var(--space-3);
   border: none;
   border-radius: var(--radius-sm);
-  background-color: #0a1628;
+  background-color: #1a1028;
   color: var(--color-primary);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
