@@ -149,7 +149,7 @@ export async function renderNuevoCorte() {
     '</div>' +
     '<div class="form-actions">' +
     '<button type="button" class="btn btn--secondary" id="btn-cancelar-corte">Cancelar</button>' +
-    '<button type="button" class="btn btn--primary" id="btn-guardar-corte">Guardar Corte</button>' +
+    '<button type="button" class="btn btn--success" id="btn-guardar-corte">Guardar Corte</button>' +
     '</div>' +
     '</div>';
 

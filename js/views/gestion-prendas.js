@@ -719,7 +719,7 @@ export async function renderFormPrenda(id) {
 
       <div class="form-actions">
         <button type="button" class="btn btn--secondary" id="btn-cancelar-prenda">Cancelar</button>
-        <button type="submit" class="btn btn--primary" id="btn-guardar-prenda">
+        <button type="submit" class="btn btn--success" id="btn-guardar-prenda">
           ${esNueva ? "Crear Prenda" : "Guardar Cambios"}
         </button>
       </div>

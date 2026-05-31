@@ -22,7 +22,7 @@
 
 .btn--primary {
   background-color: var(--color-primary);
-  color: #0c0a14;
+  color: #0d0a15;
 }
 
 .btn--primary:hover {
@@ -55,7 +55,25 @@
 }
 
 .btn--danger:hover {
-  background-color: rgba(239, 83, 80, 0.2);
+  background-color: rgba(255, 107, 107, 0.2);
+}
+
+.btn--success {
+  background-color: var(--color-success);
+  color: #0d0a15;
+}
+
+.btn--success:hover {
+  background-color: #6ee7b7;
+}
+
+.btn--accent {
+  background-color: var(--color-accent);
+  color: #0d0a15;
+}
+
+.btn--accent:hover {
+  background-color: #fb923c;
 }
 
 .btn--ghost {
@@ -102,8 +120,8 @@
   height: 56px;
   padding: 0;
   border-radius: 50%;
-  background-color: var(--color-primary);
-  color: #0c0a14;
+  background-color: var(--color-success);
+  color: #0d0a15;
   box-shadow: var(--shadow-md);
   z-index: 90;
   display: flex;
@@ -118,6 +136,7 @@
 .btn--fab:hover {
   transform: scale(1.05);
   box-shadow: var(--shadow-lg);
+  background-color: #6ee7b7;
 }
 
 .fab-btn {
@@ -131,7 +150,7 @@
   cursor: pointer;
   box-shadow: var(--shadow-md);
   transition: all var(--transition-base);
-  color: #0c0a14;
+  color: #0d0a15;
 }
 
 .fab-btn:hover {
@@ -157,7 +176,7 @@
 }
 
 .fab-delete:hover {
-  background-color: #d32f2f;
+  background-color: #e05555;
 }
 
 .btn:disabled {

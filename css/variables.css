@@ -5,25 +5,27 @@
 
 :root {
     /* ----- COLORES ----- */
-    --color-bg: #0c0a14;
-    --color-surface: #161222;
-    --color-surface-variant: #1f1a30;
-    --color-primary: #a78bfa;
-    --color-primary-variant: #c4b5fd;
-    --color-primary-bg: rgba(167, 139, 250, 0.12);
-    --color-text: #f0ecf8;
-    --color-text-secondary: #a89cc0;
-    --color-text-muted: #6a5e80;
-    --color-border: #2a2440;
-    --color-divider: #2a2440;
-    --color-error: #ef5350;
-    --color-error-bg: rgba(239, 83, 80, 0.12);
-    --color-success: #66bb6a;
-    --color-success-bg: rgba(102, 187, 106, 0.12);
-    --color-warning: #fbbf24;
-    --color-warning-bg: rgba(251, 191, 36, 0.12);
-    --color-info: #42a5f5;
-    --color-info-bg: rgba(66, 165, 245, 0.12);
+    --color-bg: #0d0a15;
+    --color-surface: #1a1425;
+    --color-surface-variant: #28203a;
+    --color-primary: #b388ff;
+    --color-primary-variant: #dcc4ff;
+    --color-primary-bg: rgba(179, 136, 255, 0.12);
+    --color-accent: #f97316;
+    --color-accent-bg: rgba(249, 115, 22, 0.12);
+    --color-text: #f5eff8;
+    --color-text-secondary: #c0b0d0;
+    --color-text-muted: #7a6888;
+    --color-border: #322848;
+    --color-divider: #322848;
+    --color-error: #ff6b6b;
+    --color-error-bg: rgba(255, 107, 107, 0.12);
+    --color-success: #4ade80;
+    --color-success-bg: rgba(74, 222, 128, 0.12);
+    --color-warning: #f59e0b;
+    --color-warning-bg: rgba(245, 158, 11, 0.12);
+    --color-info: #38bdf8;
+    --color-info-bg: rgba(56, 189, 248, 0.12);
 
     /* ----- ESPACIADO ----- */
     --space-1: 4px;

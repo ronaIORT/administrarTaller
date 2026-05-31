@@ -176,7 +176,7 @@ function renderFormularioHTML() {
     '<label class="form-label" for="pg-gastos-notas">Notas (opcional)</label>' +
     '<textarea id="pg-gastos-notas" class="form-input" rows="2" placeholder="Detalles adicionales..."></textarea>' +
     '</div>' +
-    '<button type="submit" class="btn btn--primary btn--full" id="pg-btn-registrar-gasto">Registrar Gasto</button>' +
+    '<button type="submit" class="btn btn--accent btn--full" id="pg-btn-registrar-gasto">Registrar Gasto</button>' +
     '</form>';
 }
 

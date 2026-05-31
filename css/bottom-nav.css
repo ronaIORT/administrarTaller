@@ -14,7 +14,7 @@
   padding-bottom: env(safe-area-inset-bottom, 0);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(22, 18, 34, 0.92);
+  background-color: rgba(40, 32, 58, 0.95);
 }
 
 .bottom-nav.hidden {

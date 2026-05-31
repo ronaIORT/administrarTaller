@@ -497,7 +497,7 @@ export function renderTabAsignar(corte, container, opciones) {
     // Boton submit
     (esTerminado
       ? ""
-      : '<button type="button" class="btn btn--primary at-asignar__submit" id="btn-submit-asignacion">Asignar Tareas</button>') +
+      : '<button type="button" class="btn btn--success at-asignar__submit" id="btn-submit-asignacion">Asignar Tareas</button>') +
     '<p id="error-asignacion" class="form-error" hidden></p>' +
     "</div>" +
     // Historial de asignaciones

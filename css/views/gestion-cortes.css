@@ -62,7 +62,7 @@
 .filter-chip.active {
   background-color: var(--color-primary);
   border-color: var(--color-primary);
-  color: #0c0a14;
+  color: #0d0a15;
 }
 
 /* ----- LISTA DE CORTES ----- */
@@ -109,7 +109,7 @@
 .corte-card:hover {
   border-color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(167, 139, 250, 0.12);
+  box-shadow: 0 4px 16px rgba(179, 136, 255, 0.12);
 }
 
 .corte-card:hover::before {
@@ -177,13 +177,13 @@
 
 .progress-bar__fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary), #c4b5fd);
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent));
   border-radius: 3px;
   transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .progress-bar__fill--completo {
-  background: linear-gradient(90deg, var(--color-success), #81c784);
+  background: linear-gradient(90deg, var(--color-success), #6ee7b7);
 }
 
 /* ----- INFO: TALLAS, CANTIDAD, FECHA ----- */

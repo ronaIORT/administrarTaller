@@ -96,7 +96,7 @@ export function renderTabRegistrar(pagos, cortes, trabajadoresMap, trabajadoresL
     '<label class="form-label" for="pg-input-notas">Notas (opcional)</label>' +
     '<textarea id="pg-input-notas" class="form-input" rows="2" placeholder="Descripcion del pago..."></textarea>' +
     '</div>' +
-    '<button type="submit" class="btn btn--primary btn--full" id="pg-btn-registrar">Registrar Pago</button>' +
+    '<button type="submit" class="btn btn--success btn--full" id="pg-btn-registrar">Registrar Pago</button>' +
     '</form>' +
     '</div>';
 
