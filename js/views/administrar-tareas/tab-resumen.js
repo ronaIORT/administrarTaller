@@ -216,38 +216,41 @@ function exportarPDF(corte, prenda, trabajadoresMap) {
     doc.line(14, y, 196, y);
     y += 6;
 
-    // --- Seccion Tareas ---
+    // --- Seccion Tareas (formato tab-corte.js) ---
     doc.setFontSize(11);
     doc.setFont(undefined, "bold");
     doc.text("TAREAS", 14, y);
     y += 7;
 
-    const tareasBody = [];
-    (corte.tareas || []).forEach(function (t) {
-      const asignados = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-      const total = t.unidadesTotales || 0;
-      const pct = total > 0 ? Math.round((asignados / total) * 100) : 0;
-      tareasBody.push([
-        t.nombre || "-",
-        formatBs(t.precioUnitario || 0),
-        String(asignados),
-        String(total),
-        pct + "%",
-      ]);
+    const tareasBodyCorte = [];
+    (corte.tareas || []).forEach(function (tarea) {
+      const lineasTallas = [];
+      const lineasTrabajadores = [];
+
+      (tarea.asignaciones || []).forEach(function (a) {
+        const totalCorte = ((corte.tallas || []).find(function (ct) { return ct.talla === a.talla; }) || {}).cantidad || 0;
+        const nombreTrab = trabajadoresMap[a.trabajadorId] || "Trab. " + a.trabajadorId;
+        lineasTallas.push((a.talla || "-") + " || " + (a.cantidad || 0) + "/" + totalCorte);
+        lineasTrabajadores.push(nombreTrab);
+      });
+
+      const celdaTarea = (tarea.nombre || "Sin nombre") + "\n" + formatCtv(tarea.precioUnitario || 0);
+      const celdaTallas = lineasTallas.length > 0 ? lineasTallas.join("\n") : "Sin asignar";
+      const celdaTrabajadores = lineasTrabajadores.length > 0 ? lineasTrabajadores.join("\n") : "Sin asignar";
+
+      tareasBodyCorte.push([celdaTarea, celdaTallas, celdaTrabajadores]);
     });
 
     doc.autoTable({
-      head: [["Tarea", "Precio/Un.", "Hecho", "Total", "%"]],
-      body: tareasBody,
+      head: [["Tarea", "Tallas", "Trabajadores"]],
+      body: tareasBodyCorte.length > 0 ? tareasBodyCorte : [["Sin tareas registradas", "", ""]],
       startY: y,
       theme: "grid",
-      styles: { fontSize: 9 },
+      styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
       columnStyles: {
-        0: { cellWidth: 55 },
-        1: { cellWidth: 28, halign: "right" },
-        2: { cellWidth: 22, halign: "center" },
-        3: { cellWidth: 22, halign: "center" },
-        4: { cellWidth: 22, halign: "center" },
+        0: { cellWidth: 45 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 60 },
       },
     });
     y = doc.lastAutoTable.finalY + 6;
@@ -361,8 +364,6 @@ function exportarPDF(corte, prenda, trabajadoresMap) {
       doc.text("DESGLOSE POR TRABAJADOR", 14, y);
       y += 8;
 
-      const todasTallasCorte = (corte.tallas || []).map(function (ct) { return ct.talla; });
-
       trabajadoresIds.forEach(function (tid) {
         const datos = agrupado[tid];
         const nombreTrab = trabajadoresMap[parseInt(tid)] || "Trabajador " + tid;
@@ -379,49 +380,23 @@ function exportarPDF(corte, prenda, trabajadoresMap) {
         y += 7;
 
         const tareasBody = datos.tareas.map(function (tarea) {
-          const tallasAsignadasMap = {};
-          tarea.tallas.forEach(function (t) {
-            tallasAsignadasMap[t.nombre] = t;
+          const tallasLineas = tarea.tallas.map(function (t) {
+            return t.nombre + " || " + t.cantidadAsignada + "/" + t.totalCorte;
           });
 
-          var todasCompletas = true;
-          todasTallasCorte.forEach(function (tallaNombre) {
-            var ct = (corte.tallas || []).find(function (ct) { return ct.talla === tallaNombre; });
-            var asignada = tallasAsignadasMap[tallaNombre];
-            if (!asignada || asignada.cantidadAsignada !== ct.cantidad) {
-              todasCompletas = false;
-            }
-          });
-
-          var tallasStr;
-          if (todasCompletas) {
-            tallasStr = "Completo.";
-          } else {
-            var partes = [];
-            tarea.tallas.forEach(function (t) {
-              if (t.cantidadAsignada === t.totalCorte) {
-                partes.push(t.nombre);
-              } else {
-                partes.push(t.nombre + "(" + t.cantidadAsignada + "/" + t.totalCorte + ")");
-              }
-            });
-            tallasStr = partes.join(", ") + ".";
-          }
-
-          const subtotalBs = centavosABolivianos(tarea.totalCtv);
-          return [tarea.tareaNombre, tallasStr, subtotalBs.toFixed(2) + " Bs"];
+          return [tarea.tareaNombre, tallasLineas.join("\n"), formatBs(tarea.totalCtv)];
         });
 
         doc.autoTable({
-          head: [["Tarea", "Tallas", "Subtotal"]],
+          head: [["Tareas", "Tallas", "Total"]],
           body: tareasBody,
           startY: y,
           theme: "grid",
-          styles: { fontSize: 8, cellPadding: 2 },
+          styles: { fontSize: 8, cellPadding: 2, overflow: "linebreak" },
           columnStyles: {
             0: { cellWidth: 55 },
-            1: { cellWidth: 82 },
-            2: { cellWidth: 38, halign: "right" },
+            1: { cellWidth: 80 },
+            2: { cellWidth: 35, halign: "right" },
           },
           margin: { left: 14 },
         });
