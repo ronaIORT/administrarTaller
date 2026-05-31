@@ -141,7 +141,7 @@
 .pg-saldo-card:hover {
   border-color: var(--color-primary);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(80, 150, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.15);
 }
 
 .pg-saldo-card:hover::before {
@@ -357,7 +357,7 @@
 .pg-pago-card:hover {
   border-color: var(--color-primary-variant);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(80, 150, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.15);
 }
 
 .pg-pago-card:hover::before {
@@ -479,7 +479,7 @@
 .pg-gasto-card:hover {
   border-color: var(--color-warning);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(246, 142, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(255, 217, 61, 0.15);
 }
 
 .pg-gasto-card:hover::before {
@@ -520,12 +520,12 @@
 }
 
 .pg-gasto-card__cat--servicios {
-  background: rgba(92, 187, 255, 0.12);
+  background: rgba(107, 203, 119, 0.15);
   color: var(--color-info);
 }
 
 .pg-gasto-card__cat--otros {
-  background: rgba(90, 127, 160, 0.12);
+  background: rgba(138, 123, 107, 0.15);
   color: var(--color-text-muted);
 }
 

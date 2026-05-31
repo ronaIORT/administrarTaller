@@ -1,31 +1,31 @@
 /* =============================================================
- * VARIABLES CSS - Custom properties del tema oscuro
- * Paleta inspirada en EDteam — azul profundo sobre negro
+ * VARIABLES CSS - Custom properties del tema
+ * Paleta cálida: naranja, coral, ámbar sobre azul oscuro suave
  * ============================================================= */
 
 :root {
-    /* ----- COLORES (EDteam) ----- */
-    --color-bg: #0a0a0a;
-    --color-surface: #0f151a;
-    --color-surface-variant: #151d26;
-    --color-primary: #5096FF;
-    --color-primary-variant: #80B5FF;
-    --color-primary-bg: rgba(80, 150, 255, 0.12);
-    --color-accent: #0195FF;
-    --color-accent-bg: rgba(1, 149, 255, 0.12);
-    --color-text: #f1f5f9;
-    --color-text-secondary: #94a3b8;
-    --color-text-muted: #64748b;
-    --color-border: #1e293b;
-    --color-divider: #1e293b;
-    --color-error: #FE2C55;
-    --color-error-bg: rgba(254, 44, 85, 0.12);
-    --color-success: #09D69C;
-    --color-success-bg: rgba(9, 214, 156, 0.12);
-    --color-warning: #F68E00;
-    --color-warning-bg: rgba(246, 142, 0, 0.12);
-    --color-info: #5CBBFF;
-    --color-info-bg: rgba(92, 187, 255, 0.12);
+    /* ----- COLORES (Paleta Cálida) ----- */
+    --color-bg: #1a1a2e;
+    --color-surface: #222244;
+    --color-surface-variant: #2a2a4a;
+    --color-primary: #FF8C42;
+    --color-primary-variant: #FFB347;
+    --color-primary-bg: rgba(255, 140, 66, 0.15);
+    --color-accent: #FF6B6B;
+    --color-accent-bg: rgba(255, 107, 107, 0.15);
+    --color-text: #f0e6d3;
+    --color-text-secondary: #b8a99a;
+    --color-text-muted: #8a7b6b;
+    --color-border: #3a3a5a;
+    --color-divider: #3a3a5a;
+    --color-error: #FF6B6B;
+    --color-error-bg: rgba(255, 107, 107, 0.15);
+    --color-success: #4ECDC4;
+    --color-success-bg: rgba(78, 205, 196, 0.15);
+    --color-warning: #FFD93D;
+    --color-warning-bg: rgba(255, 217, 61, 0.15);
+    --color-info: #6BCB77;
+    --color-info-bg: rgba(107, 203, 119, 0.15);
 
     /* ----- ESPACIADO ----- */
     --space-1: 4px;

@@ -846,7 +846,7 @@ function renderChartIngresosCostos(datos, periodo) {
         {
           label: "Ingresos",
           data: ingresosData,
-          backgroundColor: "#09af4d",
+          backgroundColor: "#4ECDC4",
           borderRadius: 4,
           barPercentage: 0.6,
           categoryPercentage: 0.7,
@@ -855,7 +855,7 @@ function renderChartIngresosCostos(datos, periodo) {
         {
           label: "Costos",
           data: costosData,
-          backgroundColor: "#ef5350",
+          backgroundColor: "#FF6B6B",
           borderRadius: 4,
           barPercentage: 0.6,
           categoryPercentage: 0.7,
@@ -865,11 +865,11 @@ function renderChartIngresosCostos(datos, periodo) {
           label: "Ganancia",
           data: gananciaData,
           type: "line",
-          borderColor: "#d4e5f7",
-          backgroundColor: "rgba(212, 229, 247, 0.08)",
+          borderColor: "#FFB347",
+          backgroundColor: "rgba(255, 179, 71, 0.1)",
           borderWidth: 2,
-          pointBackgroundColor: "#d4e5f7",
-          pointBorderColor: "#d4e5f7",
+          pointBackgroundColor: "#FFB347",
+          pointBorderColor: "#FFB347",
           pointRadius: 4,
           pointHoverRadius: 6,
           tension: 0.3,
@@ -928,7 +928,7 @@ function renderChartRentabilidad(datos, periodo) {
         {
           label: "Ingresos",
           data: ingresosData,
-          backgroundColor: "#09af4d",
+          backgroundColor: "#4ECDC4",
           borderRadius: 4,
           barPercentage: 0.7,
           categoryPercentage: 0.8
@@ -936,7 +936,7 @@ function renderChartRentabilidad(datos, periodo) {
         {
           label: "Costos",
           data: costosData,
-          backgroundColor: "#ef5350",
+          backgroundColor: "#FF6B6B",
           borderRadius: 4,
           barPercentage: 0.7,
           categoryPercentage: 0.8
@@ -944,7 +944,7 @@ function renderChartRentabilidad(datos, periodo) {
         {
           label: "Ganancia",
           data: gananciaData,
-          backgroundColor: "#42a5f5",
+          backgroundColor: "#FF8C42",
           borderRadius: 4,
           barPercentage: 0.7,
           categoryPercentage: 0.8
@@ -953,11 +953,11 @@ function renderChartRentabilidad(datos, periodo) {
     },
     options: Object.assign({}, getBarLineOptions(), {
       indexAxis: "y",
-      scales: {
+        scales: {
         x: {
-          grid: { color: "rgba(30, 58, 95, 0.5)", drawBorder: false },
+          grid: { color: "rgba(58, 58, 90, 0.5)", drawBorder: false },
           ticks: {
-            color: "#5a7fa0",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 },
             callback: function (value) { return "Bs " + value; }
           }
@@ -965,7 +965,7 @@ function renderChartRentabilidad(datos, periodo) {
         y: {
           grid: { display: false },
           ticks: {
-            color: "#8fb8d8",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 }
           }
         }
@@ -1003,11 +1003,11 @@ function renderChartMargen(datos, periodo) {
       datasets: [{
         label: "Margen %",
         data: margenData,
-        borderColor: "#42a5f5",
-        backgroundColor: "rgba(66, 165, 245, 0.12)",
+        borderColor: "#FF8C42",
+        backgroundColor: "rgba(255, 140, 66, 0.12)",
         borderWidth: 2.5,
-        pointBackgroundColor: "#42a5f5",
-        pointBorderColor: "#0f2744",
+        pointBackgroundColor: "#FF8C42",
+        pointBorderColor: "#1a1a2e",
         pointBorderWidth: 2,
         pointRadius: 4,
         pointHoverRadius: 6,
@@ -1022,10 +1022,10 @@ function renderChartMargen(datos, periodo) {
       plugins: {
         legend: { display: false },
         tooltip: {
-          backgroundColor: "rgba(15, 39, 68, 0.95)",
-          titleColor: "#d4e5f7",
-          bodyColor: "#d4e5f7",
-          borderColor: "#1e3a5f",
+          backgroundColor: "rgba(34, 34, 68, 0.95)",
+          titleColor: "#f0e6d3",
+          bodyColor: "#f0e6d3",
+          borderColor: "#3a3a5a",
           borderWidth: 1,
           cornerRadius: 8,
           padding: 12,
@@ -1041,12 +1041,12 @@ function renderChartMargen(datos, periodo) {
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: "#8fb8d8", font: { family: "'Inter', sans-serif", size: 12 } }
+          ticks: { color: "#b8a99a", font: { family: "'Inter', sans-serif", size: 12 } }
         },
         y: {
-          grid: { color: "rgba(30, 58, 95, 0.5)", drawBorder: false },
+          grid: { color: "rgba(58, 58, 90, 0.5)", drawBorder: false },
           ticks: {
-            color: "#5a7fa0",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 },
             callback: function (value) { return value.toFixed(0) + "%"; }
           }
@@ -1107,7 +1107,7 @@ function renderChartDistCostos(datos, periodo) {
     return;
   }
 
-  var doughnutColors = ["#ef5350", "#ffb74d", "#ab47bc", "#42a5f5", "#26c6da", "#7e57c2", "#66bb6a", "#ff7043", "#78909c"];
+  var doughnutColors = ["#FF6B6B", "#FFD93D", "#FF8C42", "#4ECDC4", "#6BCB77", "#FFB347", "#ff8066", "#5ee0c9", "#b8a99a"];
 
   var ctx = canvas.getContext("2d");
   chartInstances["chart-dist-costos"] = new Chart(ctx, {
@@ -1117,9 +1117,9 @@ function renderChartDistCostos(datos, periodo) {
       datasets: [{
         data: costosData,
         backgroundColor: doughnutColors.slice(0, labels.length),
-        borderColor: "#0f2744",
+        borderColor: "#1a1a2e",
         borderWidth: 2,
-        hoverBorderColor: "#1e3a5f"
+        hoverBorderColor: "#3a3a5a"
       }]
     },
     options: {
@@ -1130,7 +1130,7 @@ function renderChartDistCostos(datos, periodo) {
         legend: {
           position: "bottom",
           labels: {
-            color: "#8fb8d8",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 },
             usePointStyle: true,
             padding: 16,
@@ -1138,10 +1138,10 @@ function renderChartDistCostos(datos, periodo) {
           }
         },
         tooltip: {
-          backgroundColor: "rgba(15, 39, 68, 0.95)",
-          titleColor: "#d4e5f7",
-          bodyColor: "#d4e5f7",
-          borderColor: "#1e3a5f",
+          backgroundColor: "rgba(34, 34, 68, 0.95)",
+          titleColor: "#f0e6d3",
+          bodyColor: "#f0e6d3",
+          borderColor: "#3a3a5a",
           borderWidth: 1,
           cornerRadius: 8,
           padding: 12,
@@ -1165,10 +1165,10 @@ function renderChartDistCostos(datos, periodo) {
         ctx2.textAlign = "center";
         ctx2.textBaseline = "middle";
         ctx2.font = "700 28px 'Inter', sans-serif";
-        ctx2.fillStyle = "#ef5350";
+        ctx2.fillStyle = "#FF6B6B";
         ctx2.fillText("Bs " + (totalCostos / 100).toFixed(0), centerX, centerY - 8);
         ctx2.font = "400 11px 'Inter', sans-serif";
-        ctx2.fillStyle = "#5a7fa0";
+        ctx2.fillStyle = "#b8a99a";
         ctx2.fillText("costo total", centerX, centerY + 16);
         ctx2.restore();
       }
@@ -1212,7 +1212,7 @@ function renderChartTopCortes(datos, periodo) {
         {
           label: "Ingresos",
           data: ingresosData,
-          backgroundColor: "#09af4d",
+          backgroundColor: "#4ECDC4",
           borderRadius: 3,
           barPercentage: 0.6,
           categoryPercentage: 0.7
@@ -1220,7 +1220,7 @@ function renderChartTopCortes(datos, periodo) {
         {
           label: "Costos",
           data: costosData,
-          backgroundColor: "#ef5350",
+          backgroundColor: "#FF6B6B",
           borderRadius: 3,
           barPercentage: 0.6,
           categoryPercentage: 0.7
@@ -1228,7 +1228,7 @@ function renderChartTopCortes(datos, periodo) {
         {
           label: "Ganancia",
           data: gananciaData,
-          backgroundColor: "#42a5f5",
+          backgroundColor: "#FF8C42",
           borderRadius: 3,
           barPercentage: 0.6,
           categoryPercentage: 0.7
@@ -1239,9 +1239,9 @@ function renderChartTopCortes(datos, periodo) {
       indexAxis: "y",
       scales: {
         x: {
-          grid: { color: "rgba(30, 58, 95, 0.5)", drawBorder: false },
+          grid: { color: "rgba(58, 58, 90, 0.5)", drawBorder: false },
           ticks: {
-            color: "#5a7fa0",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 },
             callback: function (value) { return "Bs " + value; }
           }
@@ -1249,7 +1249,7 @@ function renderChartTopCortes(datos, periodo) {
         y: {
           grid: { display: false },
           ticks: {
-            color: "#8fb8d8",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 },
             callback: function (value) {
               var str = value || "";
@@ -1262,7 +1262,7 @@ function renderChartTopCortes(datos, periodo) {
         legend: {
           position: "bottom",
           labels: {
-            color: "#8fb8d8",
+            color: "#b8a99a",
             font: { family: "'Inter', sans-serif", size: 11 },
             usePointStyle: true,
             padding: 14
@@ -1286,17 +1286,17 @@ function getBarLineOptions() {
       legend: {
         position: "bottom",
         labels: {
-          color: "#8fb8d8",
+          color: "#b8a99a",
           font: { family: "'Inter', sans-serif", size: 12 },
           usePointStyle: true,
           padding: 20
         }
       },
       tooltip: {
-        backgroundColor: "rgba(15, 39, 68, 0.95)",
-        titleColor: "#d4e5f7",
-        bodyColor: "#d4e5f7",
-        borderColor: "#1e3a5f",
+          backgroundColor: "rgba(34, 34, 68, 0.95)",
+          titleColor: "#f0e6d3",
+          bodyColor: "#f0e6d3",
+          borderColor: "#3a3a5a",
         borderWidth: 1,
         cornerRadius: 8,
         padding: 12,
@@ -1313,12 +1313,12 @@ function getBarLineOptions() {
     scales: {
       x: {
         grid: { display: false },
-        ticks: { color: "#8fb8d8", font: { family: "'Inter', sans-serif", size: 12 } }
+        ticks: { color: "#b8a99a", font: { family: "'Inter', sans-serif", size: 12 } }
       },
       y: {
-        grid: { color: "rgba(30, 58, 95, 0.5)", drawBorder: false },
+        grid: { color: "rgba(58, 58, 90, 0.5)", drawBorder: false },
         ticks: {
-          color: "#5a7fa0",
+          color: "#b8a99a",
           font: { family: "'Inter', sans-serif", size: 11 },
           callback: function (value) { return "Bs " + value; }
         }

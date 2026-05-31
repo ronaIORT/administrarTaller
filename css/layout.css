@@ -26,7 +26,7 @@
   padding: 0 var(--space-4);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(21, 29, 38, 0.95);
+  background-color: rgba(34, 34, 68, 0.95);
 }
 
 .app-header__title {
