@@ -1,31 +1,31 @@
 /* =============================================================
  * VARIABLES CSS - Custom properties del tema oscuro
- * Modificar estos valores afecta toda la aplicación.
+ * Paleta inspirada en EDteam — azul profundo sobre negro
  * ============================================================= */
 
 :root {
-    /* ----- COLORES ----- */
-    --color-bg: #0d0a15;
-    --color-surface: #1a1425;
-    --color-surface-variant: #28203a;
-    --color-primary: #b388ff;
-    --color-primary-variant: #dcc4ff;
-    --color-primary-bg: rgba(179, 136, 255, 0.12);
-    --color-accent: #f97316;
-    --color-accent-bg: rgba(249, 115, 22, 0.12);
-    --color-text: #f5eff8;
-    --color-text-secondary: #c0b0d0;
-    --color-text-muted: #7a6888;
-    --color-border: #322848;
-    --color-divider: #322848;
-    --color-error: #ff6b6b;
-    --color-error-bg: rgba(255, 107, 107, 0.12);
-    --color-success: #4ade80;
-    --color-success-bg: rgba(74, 222, 128, 0.12);
-    --color-warning: #f59e0b;
-    --color-warning-bg: rgba(245, 158, 11, 0.12);
-    --color-info: #38bdf8;
-    --color-info-bg: rgba(56, 189, 248, 0.12);
+    /* ----- COLORES (EDteam) ----- */
+    --color-bg: #0a0a0a;
+    --color-surface: #0f151a;
+    --color-surface-variant: #151d26;
+    --color-primary: #5096FF;
+    --color-primary-variant: #80B5FF;
+    --color-primary-bg: rgba(80, 150, 255, 0.12);
+    --color-accent: #0195FF;
+    --color-accent-bg: rgba(1, 149, 255, 0.12);
+    --color-text: #f1f5f9;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-border: #1e293b;
+    --color-divider: #1e293b;
+    --color-error: #FE2C55;
+    --color-error-bg: rgba(254, 44, 85, 0.12);
+    --color-success: #09D69C;
+    --color-success-bg: rgba(9, 214, 156, 0.12);
+    --color-warning: #F68E00;
+    --color-warning-bg: rgba(246, 142, 0, 0.12);
+    --color-info: #5CBBFF;
+    --color-info-bg: rgba(92, 187, 255, 0.12);
 
     /* ----- ESPACIADO ----- */
     --space-1: 4px;

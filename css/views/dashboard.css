@@ -10,10 +10,10 @@
   z-index: 20;
   padding: var(--space-3) var(--space-4);
   margin: -1rem -1rem var(--space-4);
-  background: linear-gradient(180deg, var(--color-bg) 60%, rgba(13, 10, 21, 0.92));
+  background: linear-gradient(180deg, var(--color-bg) 60%, rgba(10, 10, 10, 0.92));
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(179, 136, 255, 0.08);
+  border-bottom: 1px solid rgba(80, 150, 255, 0.08);
 }
 
 .dash-period-chips {
@@ -33,7 +33,7 @@
 }
 
 .dash-period-chips .filter-chip.active {
-  box-shadow: 0 0 16px rgba(179, 136, 255, 0.25);
+  box-shadow: 0 0 16px rgba(80, 150, 255, 0.25);
 }
 
 /* ----- KPI CARDS — Grid 2×4 ----- */
@@ -46,7 +46,7 @@
 
 .kpi-card {
   position: relative;
-  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(40, 22, 55, 0.6) 100%);
+  background: linear-gradient(135deg, var(--color-surface) 0%, rgba(21, 29, 38, 0.6) 100%);
   border: 1px solid rgba(255, 255, 255, 0.04);
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
@@ -82,27 +82,27 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(179, 136, 255, 0.12);
+  background: rgba(80, 150, 255, 0.12);
   color: var(--color-primary);
 }
 
 .kpi-card--costos .kpi-card__icon {
-  background: rgba(239, 83, 80, 0.12);
+  background: rgba(254, 44, 85, 0.12);
   color: var(--color-error);
 }
 
 .kpi-card--positive .kpi-card__icon {
-  background: rgba(179, 136, 255, 0.15);
+  background: rgba(80, 150, 255, 0.15);
   color: var(--color-success);
 }
 
 .kpi-card--negative .kpi-card__icon {
-  background: rgba(239, 83, 80, 0.15);
+  background: rgba(254, 44, 85, 0.15);
   color: var(--color-error);
 }
 
 .kpi-card--warning .kpi-card__icon {
-  background: rgba(255, 183, 77, 0.12);
+  background: rgba(246, 142, 0, 0.12);
   color: var(--color-warning);
 }
 
@@ -174,7 +174,7 @@
 }
 
 .dash-section__link:hover {
-  color: #dcc4ff;
+  color: var(--color-primary-variant);
 }
 
 /* ----- CHARTS LAYOUT ----- */
@@ -209,7 +209,7 @@
 .cash-summary {
   display: flex;
   align-items: center;
-  background: linear-gradient(135deg, rgba(40, 22, 55, 0.8) 0%, rgba(50, 30, 65, 0.6) 100%);
+  background: linear-gradient(135deg, rgba(21, 29, 38, 0.8) 0%, rgba(21, 29, 38, 0.6) 100%);
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-lg);
   padding: var(--space-4);
@@ -225,8 +225,8 @@
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(ellipse at 20% 50%, rgba(179, 136, 255, 0.04) 0%, transparent 50%),
-              radial-gradient(ellipse at 80% 50%, rgba(239, 83, 80, 0.04) 0%, transparent 50%);
+  background: radial-gradient(ellipse at 20% 50%, rgba(80, 150, 255, 0.04) 0%, transparent 50%),
+              radial-gradient(ellipse at 80% 50%, rgba(254, 44, 85, 0.04) 0%, transparent 50%);
   pointer-events: none;
 }
 
