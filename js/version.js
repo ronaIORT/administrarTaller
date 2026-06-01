@@ -4,4 +4,4 @@
 // en el dashboard (etiqueta visible al pie).
 // ============================================================
 
-export const APP_VERSION = "2.14";
+export const APP_VERSION = "2.16";

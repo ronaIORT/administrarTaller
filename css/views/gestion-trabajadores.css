@@ -125,6 +125,26 @@
   font-variant-numeric: tabular-nums;
 }
 
+.trabajador-card__montos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.trabajador-card__pagado {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.trabajador-card__pendiente {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 .fab-container {
   position: fixed;
   bottom: calc(var(--bottom-nav-height) + var(--space-6));
@@ -168,6 +188,14 @@
 
   .trabajador-card__ganancias {
     font-size: var(--font-size-lg);
+  }
+
+  .trabajador-card__pagado {
+    font-size: var(--font-size-md);
+  }
+
+  .trabajador-card__pendiente {
+    font-size: var(--font-size-md);
   }
 }
 
