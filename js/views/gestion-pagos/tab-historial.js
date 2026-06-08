@@ -7,15 +7,7 @@
 
 import { db } from "../../db.js";
 import { escaparHTML, formatBs, formatNumero } from "../../utils.js";
-import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML } from "../shared.js";
-
-var CATEGORIAS = [
-  { id: "hilos", label: "Hilos" },
-  { id: "aceite", label: "Aceite/Mantenimiento" },
-  { id: "repuestos", label: "Repuestos" },
-  { id: "servicios", label: "Servicios" },
-  { id: "otros", label: "Otros" }
-];
+import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML, CATEGORIAS_GASTOS } from "../shared.js";
 
 function formatearFecha(fechaISO) {
   if (!fechaISO) return "";
@@ -63,7 +55,11 @@ export function renderTabHistorial(pagos, gastos, trabajadoresMap, container, op
     renderTipoActual(pagos, gastos, trabajadoresMap, tipoActual, container, opciones);
   });
 
-  container.addEventListener("click", function (e) {
+  if (container._clickHandler) {
+    container.removeEventListener("click", container._clickHandler);
+  }
+
+  container._clickHandler = function (e) {
     var btnEliminarPago = e.target.closest(".pg-btn-eliminar-pago");
     if (btnEliminarPago) {
       var pagoId = parseInt(btnEliminarPago.dataset.id);
@@ -75,7 +71,9 @@ export function renderTabHistorial(pagos, gastos, trabajadoresMap, container, op
       var gastoId = parseInt(btnEliminarGasto.dataset.id);
       confirmarEliminarGasto(gastoId, gastos, onGastoEliminado);
     }
-  });
+  };
+
+  container.addEventListener("click", container._clickHandler);
 
   renderTipoActual(pagos, gastos, trabajadoresMap, tipoActual, container, opciones);
 }
@@ -89,7 +87,7 @@ function renderTipoActual(pagos, gastos, trabajadoresMap, tipo, container, opcio
     renderFiltroTrabajadores(trabajadoresMap, filtroContainer);
     renderListaPagos(pagos, trabajadoresMap, "todos", resumenContainer, listaContainer);
   } else {
-    renderFiltroCategorias(CATEGORIAS, filtroContainer);
+    renderFiltroCategorias(CATEGORIAS_GASTOS, filtroContainer);
     renderListaGastos(gastos, "todas", resumenContainer, listaContainer);
   }
 }
@@ -246,7 +244,7 @@ function renderListaGastos(gastos, filtroCat, resumenContainer, listaContainer) 
   var html = '<div class="pg-historial__cards">';
 
   gastosFiltrados.forEach(function (gasto, i) {
-    var catInfo = CATEGORIAS.find(function (c) { return c.id === gasto.cat; });
+    var catInfo = CATEGORIAS_GASTOS.find(function (c) { return c.id === gasto.cat; });
     var catLabel = catInfo ? catInfo.label : (gasto.cat || "Sin categoria");
     var catClase = gasto.cat || "otros";
     var montoStr = formatNumero(gasto.monto || 0);
@@ -306,7 +304,7 @@ async function confirmarEliminarGasto(gastoId, gastos, onGastoEliminado) {
   var gasto = gastos.find(function (g) { return g.id === gastoId; });
   if (!gasto) return;
 
-  var catInfo = CATEGORIAS.find(function (c) { return c.id === gasto.cat; });
+  var catInfo = CATEGORIAS_GASTOS.find(function (c) { return c.id === gasto.cat; });
   var catLabel = catInfo ? catInfo.label : (gasto.cat || "Sin categoria");
   var montoStr = formatNumero(gasto.monto || 0);
 

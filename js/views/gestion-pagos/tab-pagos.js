@@ -151,12 +151,12 @@ function abrirBottomSheetPago(trabajadorId, trabajadorNombre, cortes, pagos, fil
 
     if (isNaN(montoBs) || montoBs <= 0) {
       mostrarToast("Ingresa un monto mayor a 0", "warning");
-      return;
+      return false;
     }
 
     if (!fecha) {
       mostrarToast("Selecciona una fecha", "warning");
-      return;
+      return false;
     }
 
     var montoCtv = bolivianosACentavos(montoBs);
@@ -170,7 +170,7 @@ function abrirBottomSheetPago(trabajadorId, trabajadorNombre, cortes, pagos, fil
         document.getElementById("bs-input-monto").classList.add("form-input--error");
       }
       mostrarToast("El monto excede el saldo pendiente", "warning");
-      return;
+      return false;
     }
 
     try {
@@ -311,7 +311,7 @@ function renderListaSaldos(pagos, cortes, trabajadoresLista, trabajadoresMap, fi
     var pagadoBs = formatBs(s.pagadoCtv);
     var pendienteBs = formatBs(Math.abs(s.pendienteCtv));
     var esDeudor = s.pendienteCtv > 0;
-    var esPagadoCompleto = s.pendienteCtv <= 0;
+    var esPagadoCompleto = s.pendienteCtv === 0;
 
     var porcentaje = s.ganadoCtv > 0 ? Math.min(100, Math.round((s.pagadoCtv / s.ganadoCtv) * 100)) : 0;
 

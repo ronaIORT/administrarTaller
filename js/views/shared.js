@@ -1,5 +1,13 @@
 import { escaparHTML } from "../utils.js";
 
+export var CATEGORIAS_GASTOS = [
+  { id: "hilos", label: "Hilos" },
+  { id: "aceite", label: "Aceite/Mantenimiento" },
+  { id: "repuestos", label: "Repuestos" },
+  { id: "servicios", label: "Servicios" },
+  { id: "otros", label: "Otros" }
+];
+
 // ============================================================
 // MODAL DE CONFIRMACIÓN - Diálogo blocking con callback
 // Se usa para acciones destructivas (eliminar) o importantes.
@@ -309,7 +317,10 @@ export function mostrarBottomSheet(titulo, htmlContent, onSubmit, labelCancelar,
       data.forEach((value, key) => {
         obj[key] = value;
       });
-      if (onSubmit) await onSubmit(obj);
+      if (onSubmit) {
+        const result = await onSubmit(obj);
+        if (result === false) return;
+      }
     }
     cerrar();
   });

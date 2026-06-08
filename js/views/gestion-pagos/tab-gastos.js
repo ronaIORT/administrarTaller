@@ -9,15 +9,7 @@
 
 import { db } from "../../db.js";
 import { escaparHTML } from "../../utils.js";
-import { mostrarToast } from "../shared.js";
-
-var CATEGORIAS = [
-  { id: "hilos", label: "Hilos" },
-  { id: "aceite", label: "Aceite/Mantenimiento" },
-  { id: "repuestos", label: "Repuestos" },
-  { id: "servicios", label: "Servicios" },
-  { id: "otros", label: "Otros" }
-];
+import { mostrarToast, CATEGORIAS_GASTOS } from "../shared.js";
 
 export function renderTabGastos(gastos, container, opciones) {
   container.innerHTML = "";
@@ -25,7 +17,7 @@ export function renderTabGastos(gastos, container, opciones) {
   var onGastoRegistrado = opciones ? opciones.onGastoRegistrado : null;
 
   var optionsHTML = "";
-  CATEGORIAS.forEach(function (cat) {
+  CATEGORIAS_GASTOS.forEach(function (cat) {
     optionsHTML += '<option value="' + cat.id + '">' + escaparHTML(cat.label) + '</option>';
   });
 
