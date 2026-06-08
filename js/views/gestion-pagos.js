@@ -1,85 +1,62 @@
 // ============================================================
-// GESTION DE PAGOS - Vista principal con 4 tabs
-// Tab Resumen: saldos por trabajador (filtrable por estado de corte)
-// Tab Registrar: formulario de pago global por trabajador
-// Tab Historial: lista de pagos con filtro y eliminacion
-// Tab Gastos: registro y listado de gastos operativos
+// GESTION DE PAGOS - Vista principal con 3 tabs swipeables
+// Tab Pagos: saldos por trabajador (filtro: Finalizados/Activos/Todos)
+// Tab Gastos: formulario de registro de gastos operativos
+// Tab Historial: vista unificada de pagos y gastos con filtro
 // Ruta: #historial-pagos (bottom-nav visible)
 // ============================================================
 
 import { db } from "../db.js";
 import { mostrarToast, estadoVacioHTML } from "./shared.js";
-import { renderTabResumen } from "./gestion-pagos/tab-resumen.js";
-import { renderTabRegistrar } from "./gestion-pagos/tab-registrar.js";
-import { renderTabHistorial } from "./gestion-pagos/tab-historial.js";
+import { renderTabPagos } from "./gestion-pagos/tab-pagos.js";
 import { renderTabGastos } from "./gestion-pagos/tab-gastos.js";
+import { renderTabHistorial } from "./gestion-pagos/tab-historial.js";
 
-// ============================================================
-// ESTADO DEL MODULO
-// ============================================================
+var pagos = [];
+var cortes = [];
+var trabajadoresMap = {};
+var trabajadoresLista = [];
+var tabActivo = "pagos";
+var tabContentEl = null;
+var tabsWrapperEl = null;
+var gastos = [];
 
-/** Todos los pagos cargados desde IndexedDB */
-let pagos = [];
-/** Todos los cortes cargados desde IndexedDB */
-let cortes = [];
-/** Mapa trabajadorId -> objeto trabajador para lookups O(1) */
-let trabajadoresMap = {};
-/** Array de trabajadores para selects */
-let trabajadoresLista = [];
-/** ID del tab actualmente activo */
-let tabActivo = "resumen";
-/** Referencia al elemento DOM del contenido del tab */
-let tabContentEl = null;
-/** Referencia al contenedor de tabs */
-let tabsWrapperEl = null;
-/** Trabajador preseleccionado desde el tab Resumen */
-let trabajadorPreseleccionado = null;
-/** Todos los gastos operativos cargados desde IndexedDB */
-let gastos = [];
-
-/** Definicion de los 4 tabs */
-const TABS = [
-  { id: "resumen", label: "Resumen" },
-  { id: "registrar", label: "Registrar" },
-  { id: "historial", label: "Historial" },
+var TABS = [
+  { id: "pagos", label: "Pagos" },
   { id: "gastos", label: "Gastos" },
+  { id: "historial", label: "Historial" },
 ];
 
-// ============================================================
-// RENDER PRINCIPAL - Punto de entrada desde el router
-// Sin header: usa app-container--no-header
-// ============================================================
-
 export async function renderHistorialPagos() {
-  const app = document.getElementById("app");
+  var app = document.getElementById("app");
   app.innerHTML = "";
   app.classList.remove("app--sidebar");
 
-  tabActivo = "resumen";
+  tabActivo = "pagos";
   pagos = [];
   cortes = [];
   trabajadoresMap = {};
   trabajadoresLista = [];
-  trabajadorPreseleccionado = null;
+  gastos = [];
 
-  const container = document.createElement("div");
+  var container = document.createElement("div");
   container.className = "app-container app-container--no-header";
   app.appendChild(container);
 
   container.innerHTML = '<div class="spinner" style="margin-top:60px;"></div>';
 
   try {
-    const [pagosDB, cortesDB, trabajadoresDB, gastosDB] = await Promise.all([
+    var results = await Promise.all([
       db.pagos.toArray(),
       db.cortes.toArray(),
       db.trabajadores.toArray(),
       db.gastos.toArray(),
     ]);
 
-    pagos = pagosDB;
-    cortes = cortesDB;
-    gastos = gastosDB;
-    trabajadoresLista = trabajadoresDB;
+    pagos = results[0];
+    cortes = results[1];
+    trabajadoresLista = results[2];
+    gastos = results[3];
     trabajadoresMap = {};
     trabajadoresLista.forEach(function (t) {
       trabajadoresMap[t.id] = t;
@@ -104,20 +81,16 @@ export async function renderHistorialPagos() {
   renderTabActivo();
 }
 
-// ============================================================
-// RENDER DE BOTONES DE TAB
-// ============================================================
-
 function renderTabsButtons() {
   if (!tabsWrapperEl) return;
   tabsWrapperEl.innerHTML = "";
 
-  const innerContainer = document.createElement("div");
+  var innerContainer = document.createElement("div");
   innerContainer.className = "tabs-container";
   innerContainer.setAttribute("role", "tablist");
 
   TABS.forEach(function (tab) {
-    const btn = document.createElement("button");
+    var btn = document.createElement("button");
     btn.className = "tab" + (tab.id === tabActivo ? " active" : "");
     btn.setAttribute("role", "tab");
     btn.setAttribute("aria-selected", tab.id === tabActivo ? "true" : "false");
@@ -139,35 +112,32 @@ function renderTabsButtons() {
   }
 }
 
-// ============================================================
-// SWIPE HORIZONTAL en el area de contenido
-// ============================================================
-
 function agregarSwipeAContenido() {
   if (!tabContentEl) return;
 
   if (tabContentEl._swipeHandler) {
     tabContentEl.removeEventListener("touchstart", tabContentEl._swipeHandler.start);
     tabContentEl.removeEventListener("touchend", tabContentEl._swipeHandler.end);
+    tabContentEl._swipeHandler = null;
   }
 
-  let touchStartX = 0;
-  let touchStartY = 0;
+  var touchStartX = 0;
+  var touchStartY = 0;
 
-  const onStart = function (e) {
+  var onStart = function (e) {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   };
 
-  const onEnd = function (e) {
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
+  var onEnd = function (e) {
+    var dx = e.changedTouches[0].clientX - touchStartX;
+    var dy = e.changedTouches[0].clientY - touchStartY;
 
     if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      const currentIdx = TABS.findIndex(function (t) {
+      var currentIdx = TABS.findIndex(function (t) {
         return t.id === tabActivo;
       });
-      let newIdx = currentIdx;
+      var newIdx = currentIdx;
       if (dx < -50 && currentIdx < TABS.length - 1) {
         newIdx = currentIdx + 1;
       } else if (dx > 50 && currentIdx > 0) {
@@ -186,10 +156,6 @@ function agregarSwipeAContenido() {
   tabContentEl._swipeHandler = { start: onStart, end: onEnd };
 }
 
-// ============================================================
-// CAMBIO DE TAB
-// ============================================================
-
 function onCambioTab(tabId) {
   if (tabId === tabActivo) return;
   tabActivo = tabId;
@@ -198,70 +164,51 @@ function onCambioTab(tabId) {
 
 function actualizarTabActivoUI(tabId) {
   if (!tabsWrapperEl) return;
-  const buttons = tabsWrapperEl.querySelectorAll(".tab");
+  var buttons = tabsWrapperEl.querySelectorAll(".tab");
   buttons.forEach(function (btn) {
-    const isActive = btn.dataset.tab === tabId;
+    var isActive = btn.dataset.tab === tabId;
     btn.classList.toggle("active", isActive);
     btn.setAttribute("aria-selected", isActive ? "true" : "false");
   });
 }
 
-// ============================================================
-// RENDER DEL TAB ACTIVO
-// ============================================================
-
 function renderTabActivo() {
   if (!tabContentEl) return;
 
   switch (tabActivo) {
-    case "resumen":
-      renderTabResumen(pagos, cortes, trabajadoresMap, trabajadoresLista, tabContentEl, {
-        onPagarTrabajador: function (trabajadorId) {
-          trabajadorPreseleccionado = trabajadorId;
-          onCambioTab("registrar");
-          actualizarTabActivoUI("registrar");
-        },
-        filtroEstado: "todos",
-      });
-      break;
-    case "registrar":
-      renderTabRegistrar(pagos, cortes, trabajadoresMap, trabajadoresLista, tabContentEl, {
-        trabajadorPreseleccionado: trabajadorPreseleccionado,
+    case "pagos":
+      renderTabPagos(pagos, cortes, trabajadoresMap, trabajadoresLista, tabContentEl, {
         onPagoRegistrado: recargarDatos,
-      });
-      trabajadorPreseleccionado = null;
-      break;
-    case "historial":
-      renderTabHistorial(pagos, trabajadoresMap, tabContentEl, {
-        onPagoEliminado: recargarDatos,
+        filtroEstado: "terminado",
       });
       break;
     case "gastos":
       renderTabGastos(gastos, tabContentEl, {
         onGastoRegistrado: recargarDatos,
+      });
+      break;
+    case "historial":
+      renderTabHistorial(pagos, gastos, trabajadoresMap, tabContentEl, {
+        onPagoEliminado: recargarDatos,
         onGastoEliminado: recargarDatos,
       });
       break;
   }
 }
 
-// ============================================================
-// RECARGA DE DATOS - Despues de una mutacion
-// ============================================================
-
 async function recargarDatos() {
   try {
-    const [pagosDB, cortesDB, trabajadoresDB, gastosDB] = await Promise.all([
+    var results = await Promise.all([
       db.pagos.toArray(),
       db.cortes.toArray(),
       db.trabajadores.toArray(),
       db.gastos.toArray(),
     ]);
 
-    pagos = pagosDB;
-    cortes = cortesDB;
-    gastos = gastosDB;
-    trabajadoresLista = trabajadoresDB;
+    pagos = results[0];
+    cortes = results[1];
+    trabajadoresLista = results[2];
+    gastos = results[3];
     trabajadoresMap = {};
     trabajadoresLista.forEach(function (t) {
       trabajadoresMap[t.id] = t;

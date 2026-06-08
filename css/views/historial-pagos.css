@@ -1,12 +1,11 @@
 /* =============================================================
  * GESTION DE PAGOS - Estilos de la vista con 3 tabs
- * Tab Resumen: KPIs + saldos por trabajador con filtro de estado
- * Tab Registrar: formulario de pago global
- * Tab Historial: resumen + lista de pagos con filtro y eliminacion
+ * Tab Pagos: KPIs + saldos por trabajador con filtro de estado
+ * Tab Gastos: formulario de registro de gastos operativos
+ * Tab Historial: vista unificada de pagos y gastos con selector
  * Sin header fijo (usa app-container--no-header).
  * Reutiliza clases de components.css (btn, form-input,
- * form-select, filter-chip, progress-bar, badge) y el layout
- * de tabs de administrar-tareas.css.
+ * form-select, filter-chip, progress-bar, badge).
  * ============================================================= */
 
 /* ----- LAYOUT GENERAL DE TABS Y CONTENIDO ----- */
@@ -293,6 +292,16 @@
   animation: fadeIn var(--transition-base) ease both;
 }
 
+.pg-historial__chips {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.pg-historial__chips .filter-chip {
+  flex: 1;
+  text-align: center;
+}
+
 .pg-historial__filtro {
   margin-bottom: var(--space-1);
 }
@@ -432,16 +441,6 @@
   gap: var(--space-3);
 }
 
-.pg-gastos__divider {
-  border: none;
-  border-top: 1px solid var(--color-divider);
-  margin: var(--space-2) 0;
-}
-
-.pg-gastos__filtro {
-  margin-bottom: var(--space-1);
-}
-
 .pg-gastos__cards {
   display: flex;
   flex-direction: column;
@@ -521,7 +520,7 @@
 
 .pg-gasto-card__cat--servicios {
   background: rgba(107, 203, 119, 0.15);
-  color: var(--color-info);
+  color: var(--color-text);
 }
 
 .pg-gasto-card__cat--otros {
