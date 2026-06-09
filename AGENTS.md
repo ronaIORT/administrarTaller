@@ -70,9 +70,13 @@ window.miFuncionGlobal = miFuncionGlobal;
 |---|---|---|---|
 | `precioUnitario` (tareas) | **Centavos** | Entero | `5` = 0.05 Bs |
 | `precioVentaUnitario` | **Bolivianos** | Decimal | `15.00` = 15 Bs |
-| `monto` (pagos) | **Centavos** | Entero | `2550` = 25.50 Bs |
+| `monto` (pagos) | **Bolivianos** | Decimal | `25.50` = 25.50 Bs |
+| `monto` (gastos) | **Bolivianos** | Decimal | `12.00` = 12.00 Bs |
 
-Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`. Nunca duplicar la lógica de conversión.
+Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs(bsDecimal)`, `formatBsCtv(centavos)`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`. Nunca duplicar la lógica de conversión.
+
+- `formatBs(bolivianos)` — formatea Bs decimal como `"X.XX Bs"` (pagos, gastos, totales)
+- `formatBsCtv(centavos)` — formatea centavos como `"X.XX Bs"` (precios de tareas, legacy)
 
 ## Base de datos
 
@@ -91,7 +95,7 @@ db.pagos:         ++id, trabajadorId, corteId, fecha
 
 ## Service Worker
 
-- `CACHE_NAME = "taller-costura-v1.0"` — incrementar al modificar assets
+- `CACHE_NAME = "taller-costura-v2.19"` — incrementar al modificar assets
 - **Install**: pre-cachea 38 assets locales con `addAll` + `skipWaiting()`
 - **Activate**: limpia caches de versiones anteriores + `clients.claim()`
 - **Fetch**: cache-first (cache → network → cachea respuesta). Si offline + navegación SPA → sirve `index.html`. Para scripts/styles sin cache ni red → respuesta vacía

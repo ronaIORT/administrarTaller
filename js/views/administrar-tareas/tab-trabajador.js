@@ -8,6 +8,7 @@
 import {
   escaparHTML,
   formatBs,
+  formatBsCtv,
   formatCtv,
   centavosABolivianos,
 } from "../../utils.js";
@@ -119,7 +120,7 @@ export function renderTabTrabajador(corte, container, opciones) {
           tallasHTML +
           "</div>" +
           '<span class="at-trabajador__total-tarea">' +
-          formatBs(tarea.totalCtv) +
+          formatBsCtv(tarea.totalCtv) +
           "</span>" +
           "</div>"
         );

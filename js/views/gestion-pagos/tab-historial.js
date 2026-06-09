@@ -6,7 +6,7 @@
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML, formatBs, formatNumero } from "../../utils.js";
+import { escaparHTML, formatBs } from "../../utils.js";
 import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML, CATEGORIAS_GASTOS } from "../shared.js";
 
 function formatearFecha(fechaISO) {
@@ -155,9 +155,10 @@ function renderListaPagos(pagos, trabajadoresMap, filtroTrabajador, resumenConta
   }
 
   if (resumenContainer && pagosFiltrados.length > 0) {
-    var totalMontoCtv = 0;
-    pagosFiltrados.forEach(function (p) { totalMontoCtv += p.monto || 0; });
-    var totalBs = formatBs(totalMontoCtv);
+    var totalMonto = 0;
+    pagosFiltrados.forEach(function (p) { totalMonto += p.monto || 0; });
+    totalMonto = Math.round(totalMonto * 100) / 100;
+    var totalBs = formatBs(totalMonto);
     var plural = pagosFiltrados.length === 1 ? "pago" : "pagos";
 
     resumenContainer.innerHTML =
@@ -227,7 +228,7 @@ function renderListaGastos(gastos, filtroCat, resumenContainer, listaContainer) 
     resumenContainer.innerHTML =
       '<div class="pg-historial__resumen">' +
       '<span class="pg-historial__cantidad">' + gastosFiltrados.length + ' ' + plural + '</span>' +
-      '<span class="pg-historial__total">Total: Bs ' + formatNumero(totalMonto) + '</span>' +
+      '<span class="pg-historial__total">Total: ' + formatBs(totalMonto) + '</span>' +
       '</div>';
   } else if (resumenContainer) {
     resumenContainer.innerHTML = "";
@@ -247,7 +248,7 @@ function renderListaGastos(gastos, filtroCat, resumenContainer, listaContainer) 
     var catInfo = CATEGORIAS_GASTOS.find(function (c) { return c.id === gasto.cat; });
     var catLabel = catInfo ? catInfo.label : (gasto.cat || "Sin categoria");
     var catClase = gasto.cat || "otros";
-    var montoStr = formatNumero(gasto.monto || 0);
+    var montoStr = formatBs(gasto.monto || 0);
     var fecha = formatearFecha(gasto.fecha);
     var notas = gasto.notas ? escaparHTML(gasto.notas) : "";
 
@@ -255,7 +256,7 @@ function renderListaGastos(gastos, filtroCat, resumenContainer, listaContainer) 
       '<div class="pg-gasto-card" style="animation-delay:' + (i * 40) + 'ms">' +
       '<div class="pg-gasto-card__header">' +
       '<span class="pg-gasto-card__cat pg-gasto-card__cat--' + catClase + '">' + escaparHTML(catLabel) + '</span>' +
-      '<span class="pg-gasto-card__monto">Bs ' + montoStr + '</span>' +
+      '<span class="pg-gasto-card__monto">' + montoStr + '</span>' +
       '</div>' +
       '<div class="pg-gasto-card__descripcion">' + escaparHTML(gasto.descripcion || "") + '</div>' +
       '<div class="pg-gasto-card__info">' +
@@ -306,7 +307,7 @@ async function confirmarEliminarGasto(gastoId, gastos, onGastoEliminado) {
 
   var catInfo = CATEGORIAS_GASTOS.find(function (c) { return c.id === gasto.cat; });
   var catLabel = catInfo ? catInfo.label : (gasto.cat || "Sin categoria");
-  var montoStr = formatNumero(gasto.monto || 0);
+  var montoStr = formatBs(gasto.monto || 0);
 
   mostrarModalConfirmar(
     "Eliminar Gasto",

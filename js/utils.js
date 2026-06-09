@@ -44,11 +44,21 @@ function bolivianosACentavos(bolivianos) {
 // ============================================================
 
 /**
+ * Formatea bolivianos (decimal) como texto con 2 decimales.
+ * @param {number} bolivianos - Cantidad en Bs (decimal)
+ * @returns {string} - Ej: "15.50 Bs"
+ */
+function formatBs(bolivianos) {
+  return (bolivianos).toFixed(2) + " Bs";
+}
+
+/**
  * Formatea centavos como texto en bolivianos con 2 decimales.
+ * Para compatibilidad con campos legacy que usan centavos (tareas, precios).
  * @param {number} centavos - Cantidad en centavos
  * @returns {string} - Ej: "15.50 Bs"
  */
-function formatBs(centavos) {
+function formatBsCtv(centavos) {
   return (centavos / 100).toFixed(2) + " Bs";
 }
 
@@ -79,4 +89,4 @@ function formatNumero(n) {
   return new Intl.NumberFormat("es-BO").format(n);
 }
 
-export { escaparHTML, centavosABolivianos, bolivianosACentavos, formatBs, formatCtv, formatCostoTotal, formatNumero };
+export { escaparHTML, centavosABolivianos, bolivianosACentavos, formatBs, formatBsCtv, formatCtv, formatCostoTotal, formatNumero };

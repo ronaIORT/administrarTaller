@@ -10,7 +10,7 @@
 
 import { db } from "../db.js";
 import { APP_VERSION } from "../version.js";
-import { formatBs, centavosABolivianos, escaparHTML } from "../utils.js";
+import { formatBs, formatBsCtv, centavosABolivianos, escaparHTML } from "../utils.js";
 import { estadoVacioHTML } from "./shared.js";
 
 let abortController = null;
@@ -129,22 +129,22 @@ function calcularIngresosMesCorte(cortes, year, month) {
 }
 
 function calcularPagosRealesPeriodo(pagos, periodo) {
-  var centavos = pagos.reduce(function (sum, p) {
+  var total = pagos.reduce(function (sum, p) {
     if (!p.fecha) return sum;
     if (!estaEnPeriodo(p.fecha, periodo)) return sum;
     return sum + (p.monto || 0);
   }, 0);
-  return centavosABolivianos(centavos);
+  return Math.round(total * 100) / 100;
 }
 
 function calcularPagosRealesMes(pagos, year, month) {
-  var centavos = pagos.reduce(function (sum, p) {
+  var total = pagos.reduce(function (sum, p) {
     if (!p.fecha) return sum;
     var d = new Date(p.fecha);
     if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
     return sum + (p.monto || 0);
   }, 0);
-  return centavosABolivianos(centavos);
+  return Math.round(total * 100) / 100;
 }
 
 function calcularGastosPeriodo(gastos, periodo) {
@@ -195,10 +195,10 @@ function calcularPendienteTotal(cortes, pagos, trabajadores) {
   });
   var pendiente = 0;
   Object.keys(ganado).forEach(function (id) {
-    var diff = ganado[id] - (pagado[id] || 0);
+    var diff = (ganado[id] / 100) - (pagado[id] || 0);
     if (diff > 0) pendiente += diff;
   });
-  return pendiente;
+  return Math.round(pendiente * 100) / 100;
 }
 
 function calcularCortesFinalizadosPeriodo(cortes, periodo) {
@@ -207,11 +207,12 @@ function calcularCortesFinalizadosPeriodo(cortes, periodo) {
   }).length;
 }
 
-function calcularPagosTotalesPeriodoCentavos(pagos, periodo) {
-  return pagos.reduce(function (sum, p) {
+function calcularPagosTotalesPeriodo(pagos, periodo) {
+  var total = pagos.reduce(function (sum, p) {
     if (!p.fecha || !estaEnPeriodo(p.fecha, periodo)) return sum;
     return sum + (p.monto || 0);
   }, 0);
+  return Math.round(total * 100) / 100;
 }
 
 function calcularMargen(ingresos, costos) {
@@ -289,7 +290,7 @@ function calcularKPIs(datos, periodo) {
     margen: calcularMargen(ingresos, costos),
     pendiente: calcularPendienteTotal(datos.cortes, datos.pagos, datos.trabajadores),
     finalizados: calcularCortesFinalizadosPeriodo(datos.cortes, periodo),
-    totalPagado: calcularPagosTotalesPeriodoCentavos(datos.pagos, periodo)
+    totalPagado: calcularPagosTotalesPeriodo(datos.pagos, periodo)
   };
 }
 

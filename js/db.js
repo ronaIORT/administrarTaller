@@ -1,6 +1,12 @@
 // ============================================================
 // SCHEMA - Definición de stores IndexedDB con Dexie
 // ============================================================
+// Unidades de moneda:
+//   - tarea.precioUnitario: centavos (entero)
+//   - corte.precioVentaUnitario: bolivianos (decimal)
+//   - pago.monto: bolivianos (decimal, 2 decimales)
+//   - gasto.monto: bolivianos (decimal, 2 decimales)
+// ============================================================
 
 const db = new Dexie("TallerCosturaDB");
 

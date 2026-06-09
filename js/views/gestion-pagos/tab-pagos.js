@@ -7,7 +7,7 @@
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML, formatBs, centavosABolivianos, bolivianosACentavos } from "../../utils.js";
+import { escaparHTML, formatBs, centavosABolivianos } from "../../utils.js";
 import { mostrarBottomSheet, mostrarToast, estadoVacioHTML } from "../shared.js";
 
 function calcularSaldos(trabajadoresLista, cortes, pagos, filtroEstado) {
@@ -17,9 +17,9 @@ function calcularSaldos(trabajadoresLista, cortes, pagos, filtroEstado) {
     resultado[t.id] = {
       trabajadorId: t.id,
       nombre: t.nombre,
-      ganadoCtv: 0,
-      pagadoCtv: 0,
-      pendienteCtv: 0,
+      ganadoBs: 0,
+      pagadoBs: 0,
+      pendienteBs: 0,
     };
   });
 
@@ -50,7 +50,7 @@ function calcularSaldos(trabajadoresLista, cortes, pagos, filtroEstado) {
         if (resultado[trabajadorId]) {
           var cantidad = asignacion.cantidad || 0;
           var precio = tarea.precioUnitario || 0;
-          resultado[trabajadorId].ganadoCtv += cantidad * precio;
+          resultado[trabajadorId].ganadoBs += (cantidad * precio) / 100;
         }
       });
     });
@@ -59,19 +59,19 @@ function calcularSaldos(trabajadoresLista, cortes, pagos, filtroEstado) {
   pagos.forEach(function (pago) {
     var trabajadorId = pago.trabajadorId;
     if (resultado[trabajadorId] && trabajadoresConCortesFiltrados[trabajadorId]) {
-      resultado[trabajadorId].pagadoCtv += pago.monto || 0;
+      resultado[trabajadorId].pagadoBs += pago.monto || 0;
     }
   });
 
   Object.keys(resultado).forEach(function (id) {
-    resultado[id].pendienteCtv = resultado[id].ganadoCtv - resultado[id].pagadoCtv;
+    resultado[id].pendienteBs = Math.round((resultado[id].ganadoBs - resultado[id].pagadoBs) * 100) / 100;
   });
 
   return Object.values(resultado);
 }
 
 function calcularPendienteFiltrado(trabajadorId, cortes, pagos, filtroEstado) {
-  var ganadoCtv = 0;
+  var ganadoBs = 0;
 
   var cortesFiltrados = cortes;
   if (filtroEstado === "activo") {
@@ -88,7 +88,7 @@ function calcularPendienteFiltrado(trabajadorId, cortes, pagos, filtroEstado) {
       tarea.asignaciones.forEach(function (asignacion) {
         if (asignacion.trabajadorId === trabajadorId) {
           tieneCorteFiltrado = true;
-          ganadoCtv += (asignacion.cantidad || 0) * (tarea.precioUnitario || 0);
+          ganadoBs += ((asignacion.cantidad || 0) * (tarea.precioUnitario || 0)) / 100;
         }
       });
     });
@@ -96,14 +96,14 @@ function calcularPendienteFiltrado(trabajadorId, cortes, pagos, filtroEstado) {
 
   if (!tieneCorteFiltrado) return 0;
 
-  var pagadoCtv = 0;
+  var pagadoBs = 0;
   pagos.forEach(function (pago) {
     if (pago.trabajadorId === trabajadorId) {
-      pagadoCtv += pago.monto || 0;
+      pagadoBs += pago.monto || 0;
     }
   });
 
-  return ganadoCtv - pagadoCtv;
+  return Math.round((ganadoBs - pagadoBs) * 100) / 100;
 }
 
 function generarFormularioPago(trabajadorId, trabajadorNombre, pendienteActual, filtroEstado) {
@@ -159,10 +159,8 @@ function abrirBottomSheetPago(trabajadorId, trabajadorNombre, cortes, pagos, fil
       return false;
     }
 
-    var montoCtv = bolivianosACentavos(montoBs);
-
     var pendienteRecalculado = calcularPendienteFiltrado(trabajadorId, cortes, pagos, filtroEstado);
-    if (pendienteRecalculado > 0 && montoCtv > pendienteRecalculado) {
+    if (pendienteRecalculado > 0 && montoBs > pendienteRecalculado) {
       var errorEl = document.getElementById("bs-error-monto");
       if (errorEl) {
         errorEl.textContent = "El monto excede el saldo pendiente (" + formatBs(pendienteRecalculado) + ")";
@@ -176,7 +174,7 @@ function abrirBottomSheetPago(trabajadorId, trabajadorNombre, cortes, pagos, fil
     try {
       await db.pagos.add({
         trabajadorId: parseInt(trabajadorId),
-        monto: montoCtv,
+        monto: montoBs,
         fecha: fecha,
         trabajadorNombre: trabajadorNombre,
         notas: notas,
@@ -205,7 +203,7 @@ function abrirBottomSheetPago(trabajadorId, trabajadorNombre, cortes, pagos, fil
       btnSugerir.addEventListener("click", function () {
         var inputMonto = document.getElementById("bs-input-monto");
         if (inputMonto && pendiente > 0) {
-          inputMonto.value = centavosABolivianos(pendiente).toFixed(2);
+          inputMonto.value = pendiente.toFixed(2);
         }
       });
     }
@@ -266,29 +264,31 @@ function renderListaSaldos(pagos, cortes, trabajadoresLista, trabajadoresMap, fi
 
   var saldos = calcularSaldos(trabajadoresLista, cortes, pagos, filtroEstado);
 
-  var totalPagadoCtv = 0;
-  var totalPendienteCtv = 0;
+  var totalPagadoBs = 0;
+  var totalPendienteBs = 0;
   saldos.forEach(function (s) {
-    totalPagadoCtv += s.pagadoCtv;
-    if (s.pendienteCtv > 0) {
-      totalPendienteCtv += s.pendienteCtv;
+    totalPagadoBs += s.pagadoBs;
+    if (s.pendienteBs > 0) {
+      totalPendienteBs += s.pendienteBs;
     }
   });
+
+  totalPendienteBs = Math.round(totalPendienteBs * 100) / 100;
 
   kpiContainer.innerHTML =
     '<div class="pg-kpi-grid">' +
     '<div class="pg-kpi">' +
     '<span class="pg-kpi__label">Total Pendiente</span>' +
-    '<span class="pg-kpi__valor pg-kpi__valor--danger">' + formatBs(totalPendienteCtv) + '</span>' +
+    '<span class="pg-kpi__valor pg-kpi__valor--danger">' + formatBs(totalPendienteBs) + '</span>' +
     '</div>' +
     '<div class="pg-kpi">' +
     '<span class="pg-kpi__label">Total Pagado</span>' +
-    '<span class="pg-kpi__valor">' + formatBs(totalPagadoCtv) + '</span>' +
+    '<span class="pg-kpi__valor">' + formatBs(totalPagadoBs) + '</span>' +
     '</div>' +
     '</div>';
 
   var saldosConActividad = saldos.filter(function (s) {
-    return s.ganadoCtv > 0 || s.pagadoCtv > 0;
+    return s.ganadoBs > 0 || s.pagadoBs > 0;
   });
 
   if (saldosConActividad.length === 0) {
@@ -300,20 +300,20 @@ function renderListaSaldos(pagos, cortes, trabajadoresLista, trabajadoresMap, fi
   }
 
   saldosConActividad.sort(function (a, b) {
-    return b.pendienteCtv - a.pendienteCtv;
+    return b.pendienteBs - a.pendienteBs;
   });
 
   var html = '<div class="pg-resumen__cards">';
 
   saldosConActividad.forEach(function (s, i) {
     var nombre = escaparHTML(s.nombre);
-    var ganadoBs = formatBs(s.ganadoCtv);
-    var pagadoBs = formatBs(s.pagadoCtv);
-    var pendienteBs = formatBs(Math.abs(s.pendienteCtv));
-    var esDeudor = s.pendienteCtv > 0;
-    var esPagadoCompleto = s.pendienteCtv === 0;
+    var ganadoBs = formatBs(s.ganadoBs);
+    var pagadoBs = formatBs(s.pagadoBs);
+    var pendienteBs = formatBs(Math.abs(s.pendienteBs));
+    var esDeudor = s.pendienteBs > 0;
+    var esPagadoCompleto = s.pendienteBs === 0;
 
-    var porcentaje = s.ganadoCtv > 0 ? Math.min(100, Math.round((s.pagadoCtv / s.ganadoCtv) * 100)) : 0;
+    var porcentaje = s.ganadoBs > 0 ? Math.min(100, Math.round((s.pagadoBs / s.ganadoBs) * 100)) : 0;
 
     var pendienteClase = esDeudor ? "pg-saldo-card__pendiente--deuda" : "pg-saldo-card__pendiente--ok";
 

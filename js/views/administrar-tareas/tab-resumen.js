@@ -6,7 +6,7 @@
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML, formatBs, formatCtv, formatCostoTotal, centavosABolivianos } from "../../utils.js";
+import { escaparHTML, formatBs, formatBsCtv, formatCtv, formatCostoTotal, centavosABolivianos } from "../../utils.js";
 import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
 
 // ============================================================
@@ -384,7 +384,7 @@ function exportarPDF(corte, prenda, trabajadoresMap) {
             return t.nombre + " || " + t.cantidadAsignada + "/" + t.totalCorte;
           });
 
-          return [tarea.tareaNombre, tallasLineas.join("\n"), formatBs(tarea.totalCtv)];
+          return [tarea.tareaNombre, tallasLineas.join("\n"), formatBsCtv(tarea.totalCtv)];
         });
 
         doc.autoTable({
