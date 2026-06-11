@@ -1,296 +1,305 @@
 // ============================================================
-// TAB HISTORIAL - Vista unificada de pagos y gastos
-// Selector (chips): Pagos | Gastos
-// Pagos: filtro por trabajador + resumen + lista de pagos
-// Gastos: filtro por categoria + resumen + lista de gastos
+// TAB HISTORIAL - Historial combinado de pagos y gastos
+// Filtros: tipo (Pagos/Gastos), select secundario (trabajador
+// para pagos, categoria para gastos). KPIs de cantidad y total.
+// Timeline con boton de eliminar en cada entrada.
 // ============================================================
 
 import { db } from "../../db.js";
 import { escaparHTML, formatBs } from "../../utils.js";
-import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML, CATEGORIAS_GASTOS } from "../shared.js";
+import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML } from "../shared.js";
 
-function formatearFecha(fechaISO) {
-  if (!fechaISO) return "";
-  var fecha = new Date(fechaISO);
-  var dia = String(fecha.getDate()).padStart(2, "0");
-  var mes = String(fecha.getMonth() + 1).padStart(2, "0");
-  var anio = fecha.getFullYear();
-  return dia + "/" + mes + "/" + anio;
-}
+// ============================================================
+// CATEGORIAS DE GASTOS
+// ============================================================
 
-export function renderTabHistorial(pagos, gastos, trabajadoresMap, container, opciones) {
-  container.innerHTML = "";
+var CATEGORIAS = [
+  { id: "hilos", label: "Hilos", icon: "🧵" },
+  { id: "aceite", label: "Aceite / Mantenimiento", icon: "🔧" },
+  { id: "repuestos", label: "Repuestos", icon: "⚙️" },
+  { id: "servicios", label: "Servicios", icon: "📋" },
+  { id: "otros", label: "Otros", icon: "📦" },
+];
 
-  var onPagoEliminado = opciones ? opciones.onPagoEliminado : null;
-  var onGastoEliminado = opciones ? opciones.onGastoEliminado : null;
+var CATEGORIA_MAP = {};
+CATEGORIAS.forEach(function (c) { CATEGORIA_MAP[c.id] = c; });
 
-  var chipPagosActivo = "active";
-  var chipGastosActivo = "";
+// ============================================================
+// ESTADO LOCAL
+// ============================================================
+
+/** "pagos" | "gastos" */
+let tipoActivo = "pagos";
+/** ID del filtro secundario ("todos" o un id especifico) */
+let filtroSecundario = "todos";
+
+// ============================================================
+// RENDER PRINCIPAL
+// ============================================================
+
+export function renderTabHistorial(container, opciones) {
+  var pagos = opciones.pagos;
+  var gastos = opciones.gastos;
+  var trabajadoresMap = opciones.trabajadoresMap;
+  var cortesMap = opciones.cortesMap || {};
+  var onDataChange = opciones.onDataChange;
+
+  tipoActivo = "pagos";
+  filtroSecundario = "todos";
 
   container.innerHTML =
-    '<div class="pg-historial">' +
-    '<div class="pg-historial__chips">' +
-    '<button class="filter-chip pg-chip-pagos ' + chipPagosActivo + '" data-tipo="pagos">Pagos</button>' +
-    '<button class="filter-chip pg-chip-gastos ' + chipGastosActivo + '" data-tipo="gastos">Gastos</button>' +
-    '</div>' +
-    '<div id="pg-historial-filtro"></div>' +
-    '<div id="pg-historial-resumen"></div>' +
-    '<div class="pg-historial__lista" id="pg-historial-lista"></div>' +
-    '</div>';
+    '<section class="historial-section">' +
+    '<div class="historial-filters">' +
+    '<div class="historial-type-chips" id="historial-type-chips">' +
+    '<button class="filter-chip active" data-tipo="pagos">Pagos</button>' +
+    '<button class="filter-chip" data-tipo="gastos">Gastos</button>' +
+    "</div>" +
+    '<select id="historial-select" class="form-select historial-select">' +
+    "</select>" +
+    "</div>" +
+    '<div id="historial-kpi-container"></div>' +
+    '<div id="historial-timeline-container"></div>' +
+    "</section>";
 
-  var tipoActual = "pagos";
+  poblarSelectSecundario(pagos, gastos, trabajadoresMap);
+  renderKPI(pagos, gastos, trabajadoresMap);
+  renderTimeline(pagos, gastos, trabajadoresMap, cortesMap, onDataChange);
 
-  container.querySelector(".pg-historial__chips").addEventListener("click", function (e) {
+  // Cambio de tipo (Pagos/Gastos)
+  document.getElementById("historial-type-chips").addEventListener("click", function (e) {
     var chip = e.target.closest(".filter-chip");
     if (!chip) return;
-    var nuevoTipo = chip.dataset.tipo;
-    if (nuevoTipo === tipoActual) return;
-    tipoActual = nuevoTipo;
-
-    container.querySelectorAll(".pg-historial__chips .filter-chip").forEach(function (c) {
-      c.classList.remove("active");
+    tipoActivo = chip.dataset.tipo;
+    document.querySelectorAll("#historial-type-chips .filter-chip").forEach(function (c) {
+      c.classList.toggle("active", c.dataset.tipo === tipoActivo);
     });
-    chip.classList.add("active");
-
-    renderTipoActual(pagos, gastos, trabajadoresMap, tipoActual, container, opciones);
+    filtroSecundario = "todos";
+    poblarSelectSecundario(pagos, gastos, trabajadoresMap);
+    renderKPI(pagos, gastos, trabajadoresMap);
+    renderTimeline(pagos, gastos, trabajadoresMap, cortesMap, onDataChange);
   });
 
-  if (container._clickHandler) {
-    container.removeEventListener("click", container._clickHandler);
-  }
+  // Cambio de filtro secundario (trabajador/categoria)
+  document.getElementById("historial-select").addEventListener("change", function () {
+    filtroSecundario = this.value;
+    renderKPI(pagos, gastos, trabajadoresMap);
+    renderTimeline(pagos, gastos, trabajadoresMap, cortesMap, onDataChange);
+  });
 
-  container._clickHandler = function (e) {
-    var btnEliminarPago = e.target.closest(".pg-btn-eliminar-pago");
-    if (btnEliminarPago) {
-      var pagoId = parseInt(btnEliminarPago.dataset.id);
-      confirmarEliminarPago(pagoId, pagos, trabajadoresMap, onPagoEliminado);
-      return;
+  // Delegacion de clicks en botones eliminar
+  document.getElementById("historial-timeline-container").addEventListener("click", function (e) {
+    var btnDelete = e.target.closest(".historial-entry__delete");
+    if (!btnDelete) return;
+    var tipo = btnDelete.dataset.tipo;
+    var id = parseInt(btnDelete.dataset.id);
+    if (tipo === "pago") {
+      confirmarEliminarPago(id, onDataChange);
+    } else if (tipo === "gasto") {
+      confirmarEliminarGasto(id, onDataChange);
     }
-    var btnEliminarGasto = e.target.closest(".pg-btn-eliminar-gasto");
-    if (btnEliminarGasto) {
-      var gastoId = parseInt(btnEliminarGasto.dataset.id);
-      confirmarEliminarGasto(gastoId, gastos, onGastoEliminado);
-    }
-  };
-
-  container.addEventListener("click", container._clickHandler);
-
-  renderTipoActual(pagos, gastos, trabajadoresMap, tipoActual, container, opciones);
+  });
 }
 
-function renderTipoActual(pagos, gastos, trabajadoresMap, tipo, container, opciones) {
-  var filtroContainer = document.getElementById("pg-historial-filtro");
-  var resumenContainer = document.getElementById("pg-historial-resumen");
-  var listaContainer = document.getElementById("pg-historial-lista");
+// ============================================================
+// SELECT SECUNDARIO - Trabajadores (pagos) / Categorias (gastos)
+// ============================================================
 
-  if (tipo === "pagos") {
-    renderFiltroTrabajadores(trabajadoresMap, filtroContainer);
-    renderListaPagos(pagos, trabajadoresMap, "todos", resumenContainer, listaContainer);
+function poblarSelectSecundario(pagos, gastos, trabajadoresMap) {
+  var select = document.getElementById("historial-select");
+  select.innerHTML = "";
+
+  if (tipoActivo === "pagos") {
+    // Obtener trabajadores que tienen pagos
+    var idsConPagos = [];
+    var idsVistos = {};
+    pagos.forEach(function (p) {
+      if (p.trabajadorId && !idsVistos[p.trabajadorId]) {
+        idsVistos[p.trabajadorId] = true;
+        idsConPagos.push(p.trabajadorId);
+      }
+    });
+
+    select.innerHTML = '<option value="todos">Todos los trabajadores</option>';
+    idsConPagos.forEach(function (id) {
+      var nombre = trabajadoresMap[id] || "Trabajador " + id;
+      select.innerHTML += '<option value="' + id + '">' + escaparHTML(nombre) + "</option>";
+    });
   } else {
-    renderFiltroCategorias(CATEGORIAS_GASTOS, filtroContainer);
-    renderListaGastos(gastos, "todas", resumenContainer, listaContainer);
+    // Obtener categorias que tienen gastos
+    var catsConGastos = [];
+    var catsVistos = {};
+    gastos.forEach(function (g) {
+      if (g.categoria && !catsVistos[g.categoria]) {
+        catsVistos[g.categoria] = true;
+        catsConGastos.push(g.categoria);
+      }
+    });
+
+    select.innerHTML = '<option value="todos">Todas las categorias</option>';
+    catsConGastos.forEach(function (catId) {
+      var cat = CATEGORIA_MAP[catId];
+      var label = cat ? cat.label : catId;
+      select.innerHTML += '<option value="' + catId + '">' + escaparHTML(label) + "</option>";
+    });
   }
 }
 
-function renderFiltroTrabajadores(trabajadoresMap, container) {
-  var trabajadoresOrdenados = Object.values(trabajadoresMap).sort(function (a, b) {
-    return a.nombre.localeCompare(b.nombre);
-  });
+// ============================================================
+// KPI - Cantidad y total
+// ============================================================
 
-  var html =
-    '<div class="pg-historial__filtro">' +
-    '<select id="pg-filtro-trabajador" class="form-select">' +
-    '<option value="todos">Todos los trabajadores</option>';
+function renderKPI(pagos, gastos, trabajadoresMap) {
+  var container = document.getElementById("historial-kpi-container");
+  var filtrados = obtenerFiltrados(pagos, gastos, trabajadoresMap);
+  var total = 0;
+  filtrados.forEach(function (item) { total += item.monto; });
 
-  trabajadoresOrdenados.forEach(function (t) {
-    html += '<option value="' + t.id + '">' + escaparHTML(t.nombre) + '</option>';
-  });
+  var tipoLabel = tipoActivo === "pagos" ? "pagos" : "gastos";
 
-  html += '</select></div>';
-  container.innerHTML = html;
-
-  document.getElementById("pg-filtro-trabajador").addEventListener("change", function () {
-    var pagos = window._pagosCache || [];
-    var trabajadoresMap = window._trabajadoresMapCache || {};
-    renderListaPagos(pagos, trabajadoresMap, this.value,
-      document.getElementById("pg-historial-resumen"),
-      document.getElementById("pg-historial-lista"));
-  });
+  container.innerHTML =
+    '<div class="historial-kpi-card">' +
+    '<div class="historial-kpi-card__left">' +
+    '<span class="historial-kpi-card__count">' + filtrados.length + "</span>" +
+    '<span class="historial-kpi-card__label">' + tipoLabel + "</span>" +
+    "</div>" +
+    '<span class="historial-kpi-card__total">' + formatBs(total) + "</span>" +
+    "</div>";
 }
 
-function renderFiltroCategorias(categorias, container) {
-  var html =
-    '<div class="pg-historial__filtro">' +
-    '<select id="pg-filtro-categoria" class="form-select">' +
-    '<option value="todas">Todas las categorias</option>';
+// ============================================================
+// FILTRAR DATOS
+// ============================================================
 
-  categorias.forEach(function (cat) {
-    html += '<option value="' + cat.id + '">' + escaparHTML(cat.label) + '</option>';
-  });
+function obtenerFiltrados(pagos, gastos, trabajadoresMap) {
+  var items = [];
 
-  html += '</select></div>';
-  container.innerHTML = html;
-
-  document.getElementById("pg-filtro-categoria").addEventListener("change", function () {
-    var gastos = window._gastosCache || [];
-    renderListaGastos(gastos, this.value,
-      document.getElementById("pg-historial-resumen"),
-      document.getElementById("pg-historial-lista"));
-  });
-}
-
-function renderListaPagos(pagos, trabajadoresMap, filtroTrabajador, resumenContainer, listaContainer) {
-  window._pagosCache = pagos;
-  window._trabajadoresMapCache = trabajadoresMap;
-
-  var pagosFiltrados = pagos.slice().sort(function (a, b) {
-    return (b.fecha || "").localeCompare(a.fecha || "");
-  });
-
-  if (filtroTrabajador !== "todos") {
-    var id = parseInt(filtroTrabajador);
-    pagosFiltrados = pagosFiltrados.filter(function (p) {
-      return p.trabajadorId === id;
+  if (tipoActivo === "pagos") {
+    pagos.forEach(function (p) {
+      if (filtroSecundario !== "todos" && p.trabajadorId !== parseInt(filtroSecundario)) return;
+      items.push({
+        id: p.id,
+        tipo: "pago",
+        trabajadorId: p.trabajadorId,
+        corteId: p.corteId,
+        categoria: null,
+        descripcion: null,
+        monto: p.monto,
+        fecha: p.fecha,
+        nota: p.nota,
+      });
+    });
+  } else {
+    gastos.forEach(function (g) {
+      if (filtroSecundario !== "todos" && g.categoria !== filtroSecundario) return;
+      items.push({
+        id: g.id,
+        tipo: "gasto",
+        trabajadorId: null,
+        categoria: g.categoria,
+        descripcion: g.descripcion,
+        monto: g.monto,
+        fecha: g.fecha,
+        nota: g.nota,
+      });
     });
   }
 
-  if (resumenContainer && pagosFiltrados.length > 0) {
-    var totalMonto = 0;
-    pagosFiltrados.forEach(function (p) { totalMonto += p.monto || 0; });
-    totalMonto = Math.round(totalMonto * 100) / 100;
-    var totalBs = formatBs(totalMonto);
-    var plural = pagosFiltrados.length === 1 ? "pago" : "pagos";
+  // Ordenar por fecha descendente
+  items.sort(function (a, b) {
+    if (a.fecha > b.fecha) return -1;
+    if (a.fecha < b.fecha) return 1;
+    // Misma fecha: items mas nuevos primero (por id descendente)
+    return b.id - a.id;
+  });
 
-    resumenContainer.innerHTML =
-      '<div class="pg-historial__resumen">' +
-      '<span class="pg-historial__cantidad">' + pagosFiltrados.length + ' ' + plural + '</span>' +
-      '<span class="pg-historial__total">Total: ' + totalBs + '</span>' +
-      '</div>';
-  } else if (resumenContainer) {
-    resumenContainer.innerHTML = "";
-  }
+  return items;
+}
 
-  if (pagosFiltrados.length === 0) {
-    listaContainer.innerHTML = estadoVacioHTML(
-      "Sin pagos registrados",
-      "Los pagos que registres apareceran aqui"
-    );
+// ============================================================
+// TIMELINE
+// ============================================================
+
+function renderTimeline(pagos, gastos, trabajadoresMap, cortesMap, onDataChange) {
+  var container = document.getElementById("historial-timeline-container");
+  var items = obtenerFiltrados(pagos, gastos, trabajadoresMap);
+
+  if (items.length === 0) {
+    container.innerHTML = estadoVacioHTML("Sin registros", "No hay " + (tipoActivo === "pagos" ? "pagos" : "gastos") + " registrados aun");
     return;
   }
 
-  var html = '<div class="pg-historial__cards">';
+  container.innerHTML =
+    '<div class="historial-timeline">' +
+    items.map(function (item, i) {
+      var tipoClase, titulo, badgeTipo, badgeClase, amountClase, notaHTML, badgeCorteHTML;
 
-  pagosFiltrados.forEach(function (pago, i) {
-    var nombreTrabajador = pago.trabajadorNombre || (trabajadoresMap[pago.trabajadorId] ? trabajadoresMap[pago.trabajadorId].nombre : "Desconocido");
-    var montoBs = formatBs(pago.monto || 0);
-    var fecha = formatearFecha(pago.fecha);
-    var notas = pago.notas ? escaparHTML(pago.notas) : "";
+      if (item.tipo === "pago") {
+        var nombreTrab = trabajadoresMap[item.trabajadorId] || "Trabajador " + item.trabajadorId;
+        tipoClase = "historial-entry--pago";
+        titulo = "💰 Pago a " + escaparHTML(nombreTrab);
+        badgeTipo = "Pago";
+        badgeClase = "badge--primary";
+        amountClase = "historial-entry__amount--payment";
 
-    html +=
-      '<div class="pg-pago-card" style="animation-delay:' + (i * 40) + 'ms">' +
-      '<div class="pg-pago-card__header">' +
-      '<div class="pg-pago-card__trabajador">' + escaparHTML(nombreTrabajador) + '</div>' +
-      '<div class="pg-pago-card__monto">' + montoBs + '</div>' +
-      '</div>' +
-      '<div class="pg-pago-card__info">' +
-      '<span class="pg-pago-card__fecha">' + fecha + '</span>' +
-      (notas ? '<span class="pg-pago-card__notas">' + notas + '</span>' : '') +
-      '</div>' +
-      '<div class="pg-pago-card__acciones">' +
-      '<button class="btn btn--ghost btn--sm pg-btn-eliminar-pago" data-id="' + pago.id + '">Eliminar</button>' +
-      '</div>' +
-      '</div>';
-  });
+        // Etiqueta del corte
+        var corte = cortesMap[item.corteId];
+        if (corte) {
+          var nombreCorte = escaparHTML(corte.nombreCorte || "Corte " + corte.id);
+          badgeCorteHTML = '<span class="badge badge--corte" title="' + nombreCorte + '">🧵 ' + nombreCorte + '</span>';
+        } else {
+          badgeCorteHTML = '<span class="badge badge--corte badge--corte--orphan">Corte eliminado</span>';
+        }
+      } else {
+        var cat = CATEGORIA_MAP[item.categoria];
+        var iconCat = cat ? cat.icon + " " : "📦 ";
+        var catLabel = cat ? cat.label : item.categoria;
+        tipoClase = "historial-entry--gasto";
+        titulo = iconCat + escaparHTML(item.descripcion || catLabel);
+        badgeTipo = "Gasto";
+        badgeClase = "badge--accent";
+        amountClase = "historial-entry__amount--expense";
+        badgeCorteHTML = "";
+      }
 
-  html += '</div>';
-  listaContainer.innerHTML = html;
+      notaHTML = item.nota
+        ? '<div class="historial-entry__note">' + escaparHTML(item.nota) + "</div>"
+        : "";
+
+      return (
+        '<div class="historial-entry ' + tipoClase + '" role="listitem" style="animation-delay:' + (i * 30) + 'ms">' +
+        '<div class="historial-entry__header">' +
+        '<span class="historial-entry__title">' + titulo + "</span>" +
+        '<span class="historial-entry__amount ' + amountClase + '">' +
+        formatBs(item.monto) +
+        "</span>" +
+        "</div>" +
+        '<div class="historial-entry__meta-row">' +
+        '<span class="badge ' + badgeClase + '">' + badgeTipo + "</span>" +
+        badgeCorteHTML +
+        '<span class="historial-entry__date">' + formatearFecha(item.fecha) + "</span>" +
+        '<button class="btn btn--ghost btn--sm historial-entry__delete" data-tipo="' + item.tipo + '" data-id="' + item.id + '" aria-label="Eliminar">Eliminar</button>' +
+        "</div>" +
+        notaHTML +
+        "</div>"
+      );
+    }).join("") +
+    "</div>";
 }
 
-function renderListaGastos(gastos, filtroCat, resumenContainer, listaContainer) {
-  window._gastosCache = gastos;
+// ============================================================
+// ELIMINAR PAGO
+// ============================================================
 
-  var gastosFiltrados = gastos.slice().sort(function (a, b) {
-    return (b.fecha || "").localeCompare(a.fecha || "");
-  });
-
-  if (filtroCat !== "todas") {
-    gastosFiltrados = gastosFiltrados.filter(function (g) {
-      return g.cat === filtroCat;
-    });
-  }
-
-  if (resumenContainer && gastosFiltrados.length > 0) {
-    var totalMonto = 0;
-    gastosFiltrados.forEach(function (g) { totalMonto += g.monto || 0; });
-    totalMonto = Math.round(totalMonto * 100) / 100;
-    var plural = gastosFiltrados.length === 1 ? "gasto" : "gastos";
-
-    resumenContainer.innerHTML =
-      '<div class="pg-historial__resumen">' +
-      '<span class="pg-historial__cantidad">' + gastosFiltrados.length + ' ' + plural + '</span>' +
-      '<span class="pg-historial__total">Total: ' + formatBs(totalMonto) + '</span>' +
-      '</div>';
-  } else if (resumenContainer) {
-    resumenContainer.innerHTML = "";
-  }
-
-  if (gastosFiltrados.length === 0) {
-    listaContainer.innerHTML = estadoVacioHTML(
-      "Sin gastos registrados",
-      "Los gastos operativos que registres apareceran aqui"
-    );
-    return;
-  }
-
-  var html = '<div class="pg-historial__cards">';
-
-  gastosFiltrados.forEach(function (gasto, i) {
-    var catInfo = CATEGORIAS_GASTOS.find(function (c) { return c.id === gasto.cat; });
-    var catLabel = catInfo ? catInfo.label : (gasto.cat || "Sin categoria");
-    var catClase = gasto.cat || "otros";
-    var montoStr = formatBs(gasto.monto || 0);
-    var fecha = formatearFecha(gasto.fecha);
-    var notas = gasto.notas ? escaparHTML(gasto.notas) : "";
-
-    html +=
-      '<div class="pg-gasto-card" style="animation-delay:' + (i * 40) + 'ms">' +
-      '<div class="pg-gasto-card__header">' +
-      '<span class="pg-gasto-card__cat pg-gasto-card__cat--' + catClase + '">' + escaparHTML(catLabel) + '</span>' +
-      '<span class="pg-gasto-card__monto">' + montoStr + '</span>' +
-      '</div>' +
-      '<div class="pg-gasto-card__descripcion">' + escaparHTML(gasto.descripcion || "") + '</div>' +
-      '<div class="pg-gasto-card__info">' +
-      '<span class="pg-gasto-card__fecha">' + fecha + '</span>' +
-      (notas ? '<span class="pg-gasto-card__notas">' + notas + '</span>' : '') +
-      '</div>' +
-      '<div class="pg-gasto-card__acciones">' +
-      '<button class="btn btn--ghost btn--sm pg-btn-eliminar-gasto" data-id="' + gasto.id + '">Eliminar</button>' +
-      '</div>' +
-      '</div>';
-  });
-
-  html += '</div>';
-  listaContainer.innerHTML = html;
-}
-
-async function confirmarEliminarPago(pagoId, pagos, trabajadoresMap, onPagoEliminado) {
-  var pago = pagos.find(function (p) { return p.id === pagoId; });
-  if (!pago) return;
-
-  var nombreTrabajador = pago.trabajadorNombre || (trabajadoresMap[pago.trabajadorId] ? trabajadoresMap[pago.trabajadorId].nombre : "Desconocido");
-  var montoBs = formatBs(pago.monto || 0);
-
+function confirmarEliminarPago(id, onDataChange) {
   mostrarModalConfirmar(
     "Eliminar Pago",
-    "Estas seguro de eliminar el pago de " + montoBs + " a " + nombreTrabajador + "? Esta accion no se puede deshacer.",
+    "Este pago se eliminara permanentemente. Los calculos de pendiente se actualizaran automaticamente.",
     "danger",
     async function () {
       try {
-        await db.pagos.delete(pagoId);
+        await db.pagos.delete(id);
         mostrarToast("Pago eliminado", "success");
-        if (onPagoEliminado) {
-          await onPagoEliminado();
-        }
+        if (onDataChange) await onDataChange();
       } catch (err) {
         console.error("Error al eliminar pago:", err);
         mostrarToast("Error al eliminar", "error");
@@ -301,25 +310,20 @@ async function confirmarEliminarPago(pagoId, pagos, trabajadoresMap, onPagoElimi
   );
 }
 
-async function confirmarEliminarGasto(gastoId, gastos, onGastoEliminado) {
-  var gasto = gastos.find(function (g) { return g.id === gastoId; });
-  if (!gasto) return;
+// ============================================================
+// ELIMINAR GASTO
+// ============================================================
 
-  var catInfo = CATEGORIAS_GASTOS.find(function (c) { return c.id === gasto.cat; });
-  var catLabel = catInfo ? catInfo.label : (gasto.cat || "Sin categoria");
-  var montoStr = formatBs(gasto.monto || 0);
-
+function confirmarEliminarGasto(id, onDataChange) {
   mostrarModalConfirmar(
     "Eliminar Gasto",
-    "Estas seguro de eliminar el gasto de Bs " + montoStr + " en " + catLabel + "? Esta accion no se puede deshacer.",
+    "Este gasto se eliminara permanentemente.",
     "danger",
     async function () {
       try {
-        await db.gastos.delete(gastoId);
+        await db.gastos.delete(id);
         mostrarToast("Gasto eliminado", "success");
-        if (onGastoEliminado) {
-          await onGastoEliminado();
-        }
+        if (onDataChange) await onDataChange();
       } catch (err) {
         console.error("Error al eliminar gasto:", err);
         mostrarToast("Error al eliminar", "error");
@@ -328,4 +332,14 @@ async function confirmarEliminarGasto(gastoId, gastos, onGastoEliminado) {
     undefined,
     "Eliminar"
   );
+}
+
+// ============================================================
+// FORMATEO DE FECHA
+// ============================================================
+
+function formatearFecha(fechaISO) {
+  if (!fechaISO) return "-";
+  var partes = fechaISO.split("T")[0].split("-");
+  return partes[2] + "/" + partes[1] + "/" + partes[0];
 }

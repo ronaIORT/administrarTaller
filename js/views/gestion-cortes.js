@@ -3,7 +3,7 @@
 // ============================================================
 
 import { db } from "../db.js";
-import { escaparHTML } from "../utils.js";
+import { escaparHTML, formatBs } from "../utils.js";
 import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML } from "./shared.js";
 
 /** ID del FAB flotante para crear nuevo corte */
@@ -295,20 +295,47 @@ function manejarClickDocumentoC(e) {
 }
 
 // ============================================================
-// CASCADE DELETE - Elimina el corte y todos sus pagos asociados
-// IndexedDB no tiene FK constraints, el cascade se hace manual.
+// ELIMINAR CORTE - Cascade delete de pagos asociados.
+// Antes de confirmar, cuenta los pagos del corte y los muestra
+// en el modal. La eliminacion es atomica (transaccion rw) para
+// garantizar consistencia. IndexedDB no tiene FK constraints.
 // ============================================================
 
 async function confirmarEliminarCorte(id, nombre) {
+  var pagosAsociados = [];
+  try {
+    pagosAsociados = await db.pagos.where("corteId").equals(id).toArray();
+  } catch (err) {
+    console.error("Error al buscar pagos del corte:", err);
+  }
+
+  var cantidadPagos = pagosAsociados.length;
+  var totalPagosBs = pagosAsociados.reduce(function (acc, p) {
+    return acc + (p.monto || 0);
+  }, 0);
+
+  var mensaje = 'Estas seguro de eliminar "' + nombre + '"?';
+  if (cantidadPagos > 0) {
+    mensaje += ' Este corte tiene ' + cantidadPagos +
+      ' pago(s) registrado(s) por un total de ' + formatBs(totalPagosBs) +
+      ' que tambien se eliminaran.';
+  }
+  mensaje += ' Esta accion no se puede deshacer.';
+
   mostrarModalConfirmar(
     "Eliminar Corte",
-    "Estas seguro de eliminar \"" + nombre + "\"? Tambien se eliminaran los pagos asociados. Esta accion no se puede deshacer.",
+    mensaje,
     "danger",
     async function () {
       try {
-        await db.pagos.where("corteId").equals(id).delete();
-        await db.cortes.delete(id);
-        mostrarToast("Corte eliminado", "success");
+        await db.transaction("rw", db.cortes, db.pagos, async function () {
+          await db.pagos.where("corteId").equals(id).delete();
+          await db.cortes.delete(id);
+        });
+        var toast = cantidadPagos > 0
+          ? "Corte eliminado (junto con " + cantidadPagos + " pago(s))"
+          : "Corte eliminado";
+        mostrarToast(toast, "success");
         await cargarCortes();
       } catch (err) {
         console.error("Error al eliminar corte:", err);

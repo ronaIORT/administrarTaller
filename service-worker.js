@@ -4,7 +4,7 @@
 // actualización del service worker en clientes existentes.
 // ============================================================
 
-const CACHE_NAME = "taller-costura-v2.19";
+const CACHE_NAME = "taller-costura-v2.38";
 
 // ============================================================
 // ASSETS LOCALES - Pre-cacheados durante el evento install
@@ -26,7 +26,6 @@ const ASSETS_LOCALES = [
   "./css/views/gestion-cortes.css",
   "./css/views/gestion-prendas.css",
   "./css/views/gestion-trabajadores.css",
-  "./css/views/historial-pagos.css",
   "./css/views/nuevo-corte.css",
   "./css/views/administrar-tareas.css",
   "./js/app.js",
@@ -38,20 +37,26 @@ const ASSETS_LOCALES = [
   "./js/views/gestion-prendas.js",
   "./js/views/gestion-trabajadores.js",
   "./js/views/nuevo-corte.js",
-  "./js/views/gestion-pagos.js",
   "./js/views/administrar-tareas/administrar-tareas.js",
   "./js/views/administrar-tareas/tab-asignar.js",
   "./js/views/administrar-tareas/tab-corte.js",
   "./js/views/administrar-tareas/tab-editar.js",
   "./js/views/administrar-tareas/tab-resumen.js",
   "./js/views/administrar-tareas/tab-trabajador.js",
-  "./js/views/gestion-pagos/tab-historial.js",
-  "./js/views/gestion-pagos/tab-registrar.js",
-  "./js/views/gestion-pagos/tab-resumen.js",
+  "./js/views/gestion-pagos/gestion-pagos.js",
+  "./js/views/gestion-pagos/tab-pagos.js",
   "./js/views/gestion-pagos/tab-gastos.js",
+  "./js/views/gestion-pagos/tab-historial.js",
+  "./css/views/gestion-pagos.css",
   "./icons/icon-192x192.png",
   "./icons/icon-512x512.png",
 ];
+
+// ============================================================
+// VERSION - Extraída de CACHE_NAME para enviar al cliente
+// ============================================================
+
+const APP_VERSION = CACHE_NAME.replace("taller-costura-v", "");
 
 // ============================================================
 // INSTALL - Pre-cachea todos los assets locales
@@ -85,35 +90,49 @@ self.addEventListener("install", (event) => {
 
 // ============================================================
 // ACTIVATE - Limpia caches de versiones anteriores.
+// Envía la versión al cliente para que esté disponible en app.js.
 // Sin clients.claim(): el SW controla en la siguiente carga de pagina,
 // evitando recargas innecesarias en la primera instalacion.
 // ============================================================
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) => {
-      return Promise.all(
-        names
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => {
-            console.log("[SW] Eliminando cache antiguo:", name);
-            return caches.delete(name);
-          }),
-      );
-    }),
+    caches
+      .keys()
+      .then((names) => {
+        return Promise.all(
+          names
+            .filter((name) => name !== CACHE_NAME)
+            .map((name) => {
+              console.log("[SW] Eliminando cache antiguo:", name);
+              return caches.delete(name);
+            }),
+        );
+      })
+      .then(() => {
+        // Enviar versión al cliente
+        return self.clients.matchAll().then((clients) => {
+          clients.forEach((client) => {
+            client.postMessage({ type: "VERSION", version: APP_VERSION });
+          });
+        });
+      }),
   );
 });
 
 // ============================================================
 // MESSAGE - Escucha mensajes del cliente (app.js)
-// Permite al usuario forzar la activación del SW en espera
-// mediante skipWaiting() cuando hace clic en "Recargar".
+// - SKIP_WAITING: fuerza activación del SW en espera
+// - GET_VERSION: responde con la versión actual (APP_VERSION)
 // ============================================================
 
 self.addEventListener("message", (event) => {
   if (event.data && event.data.type === "SKIP_WAITING") {
     console.log("[SW] skipWaiting() forzado por el usuario");
     self.skipWaiting();
+  }
+  if (event.data && event.data.type === "GET_VERSION") {
+    event.source.postMessage({ type: "VERSION", version: APP_VERSION });
   }
 });
 

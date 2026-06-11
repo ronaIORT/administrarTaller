@@ -1,0 +1,721 @@
+/* =============================================================
+ * GESTION PAGOS - Estilos de la vista de pagos y gastos
+ * Layout: tabs sticky + contenido swipeable
+ * Cards con barra de progreso, formularios y timeline
+ * ============================================================= */
+
+/* ----- WRAPPER DE TABS ----- */
+
+.pagos-tabs-wrapper {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--color-bg);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.pagos-tabs-wrapper .tabs-container {
+  display: flex;
+  gap: var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+  justify-content: center;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.pagos-tabs-wrapper .tabs-container::-webkit-scrollbar {
+  display: none;
+}
+
+.pagos-tabs-wrapper .tab {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--font-size-sm);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ----- FILTROS (chips) ----- */
+
+.pagos-filter-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 0;
+}
+
+.pagos-filter-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding-bottom: 2px;
+  justify-content: center;
+}
+
+.pagos-filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.pagos-filter-chips .filter-chip {
+  flex-shrink: 0;
+}
+
+/* ----- SELECT DE CORTE ----- */
+
+.pagos-corte-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+}
+
+.pagos-corte-select-wrap > label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+  flex-shrink: 0;
+}
+
+.pagos-corte-select {
+  flex: 1;
+  background-color: var(--color-surface-variant);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  min-width: 0;
+  cursor: pointer;
+  transition: border-color var(--transition-base);
+}
+
+.pagos-corte-select:hover {
+  border-color: var(--color-primary);
+}
+
+.pagos-corte-select:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(255, 140, 66, 0.15);
+}
+
+/* ----- KPIs (2 columnas) ----- */
+
+.pagos-kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+}
+
+.pagos-kpi-card {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  animation: fadeIn var(--transition-base) ease both;
+}
+
+.pagos-kpi-card__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: var(--font-weight-medium);
+}
+
+.pagos-kpi-card__value {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.pagos-kpi-card__value--primary {
+  color: var(--color-primary);
+}
+
+.pagos-kpi-card__value--success {
+  color: var(--color-success);
+}
+
+/* ----- LISTA DE TRABAJADORES ----- */
+
+.pagos-worker-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-4);
+}
+
+.pagos-worker-card {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  position: relative;
+  animation: fadeIn var(--transition-base) ease both;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.pagos-worker-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-variant) 100%);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.pagos-worker-card:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.15);
+}
+
+.pagos-worker-card:hover::before {
+  opacity: 1;
+}
+
+.pagos-worker-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.pagos-worker-card__name {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.pagos-worker-card__stats {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.pagos-worker-card__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pagos-worker-card__stat-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  font-weight: var(--font-weight-medium);
+}
+
+.pagos-worker-card__stat-value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagos-worker-card__stat-value--pending {
+  color: var(--color-primary);
+}
+
+.pagos-worker-card__stat-value--paid {
+  color: var(--color-success);
+}
+
+.pagos-worker-card__progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.pagos-worker-card__progress {
+  flex: 1;
+  height: 8px;
+  background: var(--color-surface-variant);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.pagos-worker-card__progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-success) 0%, var(--color-primary) 100%);
+  border-radius: var(--radius-full);
+  width: 0%;
+  transition: width 600ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.pagos-worker-card__progress-fill--complete {
+  background: linear-gradient(90deg, var(--color-success) 0%, #6BCB77 100%);
+}
+
+.pagos-worker-card__progress-pct {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: right;
+}
+
+.pagos-worker-card__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pagos-worker-card__actions .btn {
+  transition: all var(--transition-base);
+}
+
+.pagos-worker-card__actions .btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(255, 140, 66, 0.3);
+}
+
+.pagos-worker-card__actions .btn:disabled,
+.pagos-worker-card__actions .btn:disabled:hover {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ----- MODAL DE PAGO (contenido especifico) ----- */
+
+.pagos-modal__info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pagos-modal__info-label {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.pagos-modal__info-value {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.pagos-modal__corte-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-surface-variant);
+  border: 1px solid var(--color-divider);
+  color: var(--color-text);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pagos-modal__pending-box {
+  background: var(--color-primary-bg);
+  border: 1.5px solid rgba(255, 140, 66, 0.25);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  text-align: center;
+  cursor: pointer;
+}
+
+.pagos-modal__pending-label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.pagos-modal__pending-value {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ----- FORMULARIO DE GASTOS ----- */
+
+.gastos-form-section {
+  padding: var(--space-4) 0 var(--space-6);
+}
+
+.gastos-form-section .form-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  margin-bottom: var(--space-5);
+  letter-spacing: -0.02em;
+}
+
+.gastos-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.gastos-form .form-group {
+  margin-bottom: 0;
+}
+
+.gastos-form .form-label {
+  margin-bottom: var(--space-2);
+}
+
+.gastos-form .form-input,
+.gastos-form .form-select {
+  background-color: var(--color-surface-variant);
+}
+
+.gastos-form .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+
+.gastos-form .btn--success:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(78, 205, 196, 0.3);
+}
+
+/* ----- HISTORIAL ----- */
+
+.historial-section {
+  padding: var(--space-3) 0 var(--space-4);
+}
+
+.historial-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.historial-type-chips {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  justify-content: center;
+}
+
+.historial-type-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.historial-type-chips .filter-chip {
+  flex-shrink: 0;
+}
+
+.historial-select {
+  background-color: var(--color-surface-variant);
+}
+
+.historial-kpi-card {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+  animation: fadeIn var(--transition-base) ease both;
+}
+
+.historial-kpi-card__left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.historial-kpi-card__count {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.historial-kpi-card__label {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.historial-kpi-card__total {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Badge global para gastos */
+.badge--accent {
+  background-color: var(--color-accent-bg);
+  color: var(--color-accent);
+}
+
+/* Badge de etiqueta de corte (historial y modal) */
+.badge--corte {
+  background-color: var(--color-surface-variant);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-divider);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.badge--corte--orphan {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+/* Badge de excedente (pagado > ganado) */
+.badge--excedente {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+  border: 1px solid var(--color-error);
+  font-size: var(--font-size-xs);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Card de trabajador con excedente */
+.pagos-worker-card--excedente {
+  border-color: var(--color-error);
+}
+
+.pagos-worker-card--excedente:hover {
+  border-color: var(--color-error);
+}
+
+/* Stat-value en color de excedente */
+.pagos-worker-card__stat-value--excedente {
+  color: var(--color-error);
+}
+
+.pagos-kpi-card__value--excedente {
+  color: var(--color-error);
+}
+
+/* Barra de progreso en estado de excedente */
+.pagos-worker-card__progress-fill--excedente {
+  background: linear-gradient(90deg, var(--color-error) 0%, #ff8066 100%);
+}
+
+/* ----- TIMELINE ----- */
+
+.historial-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.historial-entry {
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1.5px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  position: relative;
+  animation: fadeIn var(--transition-base) ease both;
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.historial-entry::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  opacity: 0;
+  transition: opacity var(--transition-base);
+}
+
+.historial-entry--pago::before {
+  background: linear-gradient(180deg, var(--color-primary) 0%, var(--color-primary-variant) 100%);
+}
+
+.historial-entry--gasto::before {
+  background: linear-gradient(180deg, var(--color-accent) 0%, #ff8066 100%);
+}
+
+.historial-entry:hover {
+  border-color: var(--color-primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 140, 66, 0.15);
+}
+
+.historial-entry:hover::before {
+  opacity: 1;
+}
+
+.historial-entry__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.historial-entry__title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.historial-entry__amount {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: var(--space-3);
+}
+
+.historial-entry__amount--payment {
+  color: var(--color-primary);
+}
+
+.historial-entry__amount--expense {
+  color: var(--color-accent);
+}
+
+.historial-entry__meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+.historial-entry__date {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.historial-entry__meta-row .btn--ghost {
+  margin-left: auto;
+}
+
+.historial-entry__delete:hover {
+  background: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.historial-entry__note {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  font-style: italic;
+  margin-top: var(--space-1);
+}
+
+/* ----- TAB CONTENT AREA ----- */
+
+.pagos-tab-content {
+  min-height: calc(100vh - var(--header-height) - var(--bottom-nav-height) - 60px);
+}
+
+/* ----- SIDEBAR (rutas principales) ----- */
+
+.app--sidebar .pagos-tab-content {
+  padding-bottom: var(--bottom-nav-height);
+}
+
+/* ----- RESPONSIVE ----- */
+
+@media (min-width: 768px) {
+  .pagos-kpi-grid {
+    padding: var(--space-4) 0;
+  }
+
+  .pagos-kpi-card__value {
+    font-size: var(--font-size-2xl);
+  }
+
+  .pagos-worker-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: var(--space-4);
+    padding: 0 0 var(--space-4);
+  }
+
+  .pagos-worker-card {
+    flex-direction: column;
+  }
+
+  .pagos-worker-card__stats {
+    gap: var(--space-5);
+  }
+
+  .pagos-worker-card__stat-value {
+    font-size: var(--font-size-lg);
+  }
+
+  .gastos-form-section {
+    padding: var(--space-6) 0;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .historial-section {
+    padding: var(--space-4) 0;
+  }
+
+  .historial-timeline {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: var(--space-4);
+  }
+}
+
+@media (min-width: 1024px) {
+  .pagos-worker-list {
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  }
+
+  .historial-timeline {
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  }
+
+  .gastos-form-section {
+    max-width: 560px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .gastos-form-section {
+    max-width: 640px;
+  }
+}

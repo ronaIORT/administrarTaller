@@ -6,7 +6,7 @@ import { renderGestionPrendas, renderFormPrenda } from "./views/gestion-prendas.
 import { renderGestionCortes } from "./views/gestion-cortes.js";
 import { renderNuevoCorte } from "./views/nuevo-corte.js";
 import { renderAdministrarTareas } from "./views/administrar-tareas/administrar-tareas.js";
-import { renderHistorialPagos } from "./views/gestion-pagos.js";
+import { renderGestionPagos } from "./views/gestion-pagos/gestion-pagos.js";
 
 // ============================================================
 // RUTAS - Mapeo de hash URL a etiquetas de navegación
@@ -16,20 +16,45 @@ const RUTA_A_NAV = {
   "#dashboard": "inicio",
   "#gestion-cortes": "cortes",
   "#gestion-prendas": "prendas",
-  "#historial-pagos": "pagos",
+  "#gestion-pagos": "pagos",
   "#gestion-trabajadores": "personal",
 };
 
 // ============================================================
 // INICIALIZACIÓN - Se ejecuta cuando el DOM está listo
-// Registra el Service Worker y carga la vista inicial.
+// Registra el Service Worker, espera la versión y carga la vista inicial.
 // ============================================================
 
 function init() {
   registrarServiceWorker();
-  cargarVista(location.hash || "#dashboard");
+  esperarVersion()
+    .then(() => {
+      cargarVista(location.hash || "#dashboard");
+    });
   window.addEventListener("hashchange", () => {
     cargarVista(location.hash);
+  });
+}
+
+// ============================================================
+// ESPERAR VERSIÓN - Espera a que el SW envíe la versión
+// con timeout de 500ms para no bloquear la app si el SW tarda.
+// ============================================================
+
+function esperarVersion() {
+  return new Promise((resolve) => {
+    if (window.APP_VERSION) {
+      resolve();
+      return;
+    }
+    var timeout = setTimeout(resolve, 500);
+    navigator.serviceWorker.addEventListener("message", function onMsg(event) {
+      if (event.data && event.data.type === "VERSION") {
+        clearTimeout(timeout);
+        navigator.serviceWorker.removeEventListener("message", onMsg);
+        resolve();
+      }
+    });
   });
 }
 
@@ -63,8 +88,23 @@ function registrarServiceWorker() {
           }
         });
       });
+
+      // Solicitar versión al SW después de que esté listo
+      navigator.serviceWorker.ready.then(() => {
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: "GET_VERSION" });
+        }
+      });
     })
     .catch((err) => console.error("SW error:", err));
+
+  // Escuchar mensajes del Service Worker (versión, etc.)
+  navigator.serviceWorker.addEventListener("message", function (event) {
+    if (event.data && event.data.type === "VERSION") {
+      window.APP_VERSION = event.data.version;
+      console.log("[SW] Versión recibida:", event.data.version);
+    }
+  });
 
   // Escuchar cambios de estado via controllerchange.
   // Solo recargar si fue una actualizacion solicitada por el usuario.
@@ -130,6 +170,7 @@ async function cargarVista(ruta) {
   document.getElementById("nc-tareas-fab-container")?.remove();
   document.getElementById("at-editar-fab-container")?.remove();
   document.getElementById("at-asignar-fab-container")?.remove();
+  document.getElementById("pagos-fab-container")?.remove();
 
   if (ruta === "#dashboard") {
     await renderDashboard();
@@ -142,8 +183,8 @@ async function cargarVista(ruta) {
     await renderGestionCortes();
   } else if (ruta === "#gestion-prendas") {
     await renderGestionPrendas();
-  } else if (ruta === "#historial-pagos") {
-    await renderHistorialPagos();
+  } else if (ruta === "#gestion-pagos") {
+    await renderGestionPagos();
   } else if (ruta === "#gestion-trabajadores") {
     await renderGestionTrabajadores();
   } else if (ruta === "#nueva-prenda") {
@@ -227,8 +268,8 @@ function crearBottomNav() {
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>' +
     '<span class="nav-item__label">Prendas</span>' +
     "</a>" +
-    '<a class="nav-item" href="#historial-pagos" data-nav="pagos">' +
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>' +
+    '<a class="nav-item" href="#gestion-pagos" data-nav="pagos">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v2H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-2V4a3 3 0 0 0-3-3z"/><path d="M12 13a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/><path d="M9 6h6"/></svg>' +
     '<span class="nav-item__label">Pagos</span>' +
     "</a>" +
     '<a class="nav-item" href="#gestion-trabajadores" data-nav="personal">' +

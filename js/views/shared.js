@@ -1,13 +1,5 @@
 import { escaparHTML } from "../utils.js";
 
-export var CATEGORIAS_GASTOS = [
-  { id: "hilos", label: "Hilos" },
-  { id: "aceite", label: "Aceite/Mantenimiento" },
-  { id: "repuestos", label: "Repuestos" },
-  { id: "servicios", label: "Servicios" },
-  { id: "otros", label: "Otros" }
-];
-
 // ============================================================
 // MODAL DE CONFIRMACIÓN - Diálogo blocking con callback
 // Se usa para acciones destructivas (eliminar) o importantes.
@@ -256,84 +248,6 @@ export function crearHeader(titulo, rutaVolver) {
   header.innerHTML += `<div style="min-width:60px;"></div>`;
 
   return header;
-}
-
-// ============================================================
-// BOTTOM SHEET - Panel deslizante desde abajo para formularios
-// Se usa para registrar pagos rápidos desde el tab Pagos.
-// onSubmit(data) recibe un objeto con los datos del formulario.
-// ============================================================
-
-export function mostrarBottomSheet(titulo, htmlContent, onSubmit, labelCancelar, labelConfirmar) {
-  const textoCancelar = labelCancelar || "Cancelar";
-  const textoConfirmar = labelConfirmar || "Registrar";
-
-  const overlay = document.createElement("div");
-  overlay.className = "bottom-sheet-overlay";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-
-  overlay.innerHTML =
-    '<div class="bottom-sheet">' +
-    '<div class="bottom-sheet__handle"></div>' +
-    '<div class="bottom-sheet__header">' +
-    '<h3 class="bottom-sheet__title">' + escaparHTML(titulo) + '</h3>' +
-    '<button class="bottom-sheet__close" aria-label="Cerrar">' +
-    '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
-    '</button>' +
-    '</div>' +
-    '<div class="bottom-sheet__body">' + htmlContent + '</div>' +
-    '<div class="bottom-sheet__footer">' +
-    '<button class="btn btn--secondary bottom-sheet-cancelar">' + escaparHTML(textoCancelar) + '</button>' +
-    '<button class="btn btn--success bottom-sheet-confirmar">' + escaparHTML(textoConfirmar) + '</button>' +
-    '</div>' +
-    '</div>';
-
-  document.body.appendChild(overlay);
-  document.body.style.overflow = "hidden";
-
-  const cerrar = () => {
-    const sheet = overlay.querySelector(".bottom-sheet");
-    overlay.classList.add("closing");
-    sheet.classList.add("closing");
-    setTimeout(() => {
-      overlay.remove();
-      document.body.style.overflow = "auto";
-    }, 250);
-  };
-
-  overlay.querySelector(".bottom-sheet__close").addEventListener("click", cerrar);
-  overlay.querySelector(".bottom-sheet-cancelar").addEventListener("click", cerrar);
-
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) cerrar();
-  });
-
-  overlay.querySelector(".bottom-sheet-confirmar").addEventListener("click", async () => {
-    const form = overlay.querySelector("form");
-    if (form) {
-      const data = new FormData(form);
-      const obj = {};
-      data.forEach((value, key) => {
-        obj[key] = value;
-      });
-      if (onSubmit) {
-        const result = await onSubmit(obj);
-        if (result === false) return;
-      }
-    }
-    cerrar();
-  });
-
-  const handler = (e) => {
-    if (e.key === "Escape") {
-      cerrar();
-      document.removeEventListener("keydown", handler);
-    }
-  };
-  document.addEventListener("keydown", handler);
-
-  return overlay;
 }
 
 // ============================================================

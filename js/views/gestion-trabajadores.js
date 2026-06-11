@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { escaparHTML, formatBs, formatBsCtv } from "../utils.js";
+import { escaparHTML, formatBsCtv } from "../utils.js";
 import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML } from "./shared.js";
 
 // ============================================================
@@ -78,7 +78,6 @@ async function calcularDatosTrabajadores() {
   const datos = {};
   try {
     const cortes = await db.cortes.toArray();
-    const pagos = await db.pagos.toArray();
 
     for (const corte of cortes) {
       if (!corte.tareas) continue;
@@ -86,23 +85,16 @@ async function calcularDatosTrabajadores() {
         if (!tarea.asignaciones) continue;
         for (const asig of tarea.asignaciones) {
           const tid = asig.trabajadorId;
-          if (!datos[tid]) datos[tid] = { ganadoCtv: 0, pagadoBs: 0, tieneAsignacionesActivas: false };
+          if (!datos[tid]) datos[tid] = { ganadoCtv: 0, tieneAsignacionesActivas: false };
           datos[tid].ganadoCtv += (asig.cantidad || 0) * (tarea.precioUnitario || 0);
           if (corte.estado === "activo") datos[tid].tieneAsignacionesActivas = true;
         }
       }
     }
 
-    for (const pago of pagos) {
-      const tid = pago.trabajadorId;
-      if (!datos[tid]) datos[tid] = { ganadoCtv: 0, pagadoBs: 0, tieneAsignacionesActivas: false };
-      datos[tid].pagadoBs += pago.monto || 0;
-    }
-
     for (const tid in datos) {
       const d = datos[tid];
-      d.pendienteBs = Math.round(((d.ganadoCtv / 100) - d.pagadoBs) * 100) / 100;
-      d.puedeEliminar = !d.tieneAsignacionesActivas && d.pendienteBs <= 0;
+      d.puedeEliminar = !d.tieneAsignacionesActivas;
     }
   } catch (err) {
     console.error("Error calculando datos de trabajadores:", err);
@@ -137,16 +129,14 @@ async function cargarTrabajadores() {
     container.innerHTML = `
       <ul class="trabajadores-lista" id="trabajadores-lista" role="list">
         ${ordenados.map((t, i) => {
-          const d = datos[t.id] || { ganadoCtv: 0, pagadoBs: 0, pendienteBs: 0, puedeEliminar: true };
+          const d = datos[t.id] || { ganadoCtv: 0, puedeEliminar: true };
           const nombreEscapado = escaparHTML(t.nombre);
-          const mostrarPendiente = d.pendienteBs > 0;
           return `
             <li class="trabajador-card" data-id="${t.id}" data-nombre="${nombreEscapado}" data-puede-eliminar="${d.puedeEliminar}" role="listitem" style="animation-delay: ${i * 50}ms" tabindex="0">
               <div class="trabajador-card__contenido">
                 <span class="trabajador-card__nombre">${nombreEscapado}</span>
                 <div class="trabajador-card__montos">
-                  <span class="trabajador-card__pagado">Pagado: ${formatBs(d.pagadoBs)}</span>
-                  ${mostrarPendiente ? `<span class="trabajador-card__pendiente">Por pagar: ${formatBs(d.pendienteBs)}</span>` : ""}
+                  <span class="trabajador-card__ganado">Ganado: ${formatBsCtv(d.ganadoCtv)}</span>
                 </div>
               </div>
               <div class="trabajador-card__acciones">
@@ -472,49 +462,30 @@ function abrirModalEditar(id, nombreActual) {
 
 async function confirmarEliminar(id, nombre) {
   let tieneAsignacionesActivas = false;
-  let pendienteBs = 0;
 
   try {
     const cortes = await db.cortes.toArray();
-    const pagos = await db.pagos.where("trabajadorId").equals(id).toArray();
-
-    let ganadoCtv = 0;
-    let pagadoBs = 0;
 
     for (const corte of cortes) {
       if (!corte.tareas) continue;
       for (const tarea of corte.tareas) {
         if (!tarea.asignaciones) continue;
         for (const asig of tarea.asignaciones) {
-          if (asig.trabajadorId === id) {
-            ganadoCtv += (asig.cantidad || 0) * (tarea.precioUnitario || 0);
-            if (corte.estado === "activo") {
-              tieneAsignacionesActivas = true;
-            }
+          if (asig.trabajadorId === id && corte.estado === "activo") {
+            tieneAsignacionesActivas = true;
           }
         }
       }
     }
-
-    for (const pago of pagos) {
-      pagadoBs += pago.monto || 0;
-    }
-
-    pendienteBs = Math.round(((ganadoCtv / 100) - pagadoBs) * 100) / 100;
   } catch (err) {
     console.error("Error verificando asignaciones:", err);
   }
 
-  const tienePendiente = pendienteBs > 0;
-  const puedeEliminar = !tieneAsignacionesActivas && !tienePendiente;
+  const puedeEliminar = !tieneAsignacionesActivas;
 
   let mensaje;
-  if (tieneAsignacionesActivas && tienePendiente) {
-    mensaje = `No se puede eliminar a ${nombre} porque tiene asignaciones en cortes activos y un saldo pendiente de ${formatBs(pendienteBs)}.`;
-  } else if (tieneAsignacionesActivas) {
+  if (tieneAsignacionesActivas) {
     mensaje = `No se puede eliminar a ${nombre} porque tiene asignaciones en cortes activos.`;
-  } else if (tienePendiente) {
-    mensaje = `No se puede eliminar a ${nombre} porque tiene un saldo pendiente de ${formatBs(pendienteBs)}.`;
   } else {
     mensaje = `¿Estás seguro de eliminar a ${nombre}? Esta acción no se puede deshacer.`;
   }

@@ -1,7 +1,7 @@
 // ============================================================
 // DASHBOARD — KPIs, charts y resúmenes con período global
 // Período sticky afecta: KPIs financieros, charts 1/2/3/5,
-// caja, cortes recientes y últimos pagos.
+// caja y cortes recientes.
 // No afecta: Cortes Activos, Pendiente, Progreso.
 // Charts: (1) Ingresos/Costos Bar+Line, (2) Rentabilidad HBar,
 //         (3) Margen Line, (4) Distribución Costos Doughnut,
@@ -9,8 +9,7 @@
 // ============================================================
 
 import { db } from "../db.js";
-import { APP_VERSION } from "../version.js";
-import { formatBs, formatBsCtv, centavosABolivianos, escaparHTML } from "../utils.js";
+import { centavosABolivianos, escaparHTML } from "../utils.js";
 import { estadoVacioHTML } from "./shared.js";
 
 let abortController = null;
@@ -128,41 +127,6 @@ function calcularIngresosMesCorte(cortes, year, month) {
   }, 0);
 }
 
-function calcularPagosRealesPeriodo(pagos, periodo) {
-  var total = pagos.reduce(function (sum, p) {
-    if (!p.fecha) return sum;
-    if (!estaEnPeriodo(p.fecha, periodo)) return sum;
-    return sum + (p.monto || 0);
-  }, 0);
-  return Math.round(total * 100) / 100;
-}
-
-function calcularPagosRealesMes(pagos, year, month) {
-  var total = pagos.reduce(function (sum, p) {
-    if (!p.fecha) return sum;
-    var d = new Date(p.fecha);
-    if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
-    return sum + (p.monto || 0);
-  }, 0);
-  return Math.round(total * 100) / 100;
-}
-
-function calcularGastosPeriodo(gastos, periodo) {
-  return gastos.reduce(function (sum, g) {
-    if (!g.fecha || !estaEnPeriodo(g.fecha, periodo)) return sum;
-    return sum + (g.monto || 0);
-  }, 0);
-}
-
-function calcularGastosMes(gastos, year, month) {
-  return gastos.reduce(function (sum, g) {
-    if (!g.fecha) return sum;
-    var d = new Date(g.fecha);
-    if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
-    return sum + (g.monto || 0);
-  }, 0);
-}
-
 function calcularManoObraEstimadaPorPrenda(cortes) {
   var centavos = 0;
   cortes.forEach(function (c) {
@@ -175,49 +139,10 @@ function calcularManoObraEstimadaPorPrenda(cortes) {
   return centavosABolivianos(centavos);
 }
 
-function calcularPendienteTotal(cortes, pagos, trabajadores) {
-  var ganado = {};
-  var pagado = {};
-  trabajadores.forEach(function (t) { ganado[t.id] = 0; pagado[t.id] = 0; });
-  cortes.forEach(function (c) {
-    (c.tareas || []).forEach(function (tarea) {
-      (tarea.asignaciones || []).forEach(function (a) {
-        if (ganado[a.trabajadorId] !== undefined) {
-          ganado[a.trabajadorId] += (a.cantidad || 0) * (tarea.precioUnitario || 0);
-        }
-      });
-    });
-  });
-  pagos.forEach(function (p) {
-    if (pagado[p.trabajadorId] !== undefined) {
-      pagado[p.trabajadorId] += (p.monto || 0);
-    }
-  });
-  var pendiente = 0;
-  Object.keys(ganado).forEach(function (id) {
-    var diff = (ganado[id] / 100) - (pagado[id] || 0);
-    if (diff > 0) pendiente += diff;
-  });
-  return Math.round(pendiente * 100) / 100;
-}
-
 function calcularCortesFinalizadosPeriodo(cortes, periodo) {
   return cortes.filter(function (c) {
     return c.estado === "terminado" && c.fechaFinalizacion && estaEnPeriodo(c.fechaFinalizacion, periodo);
   }).length;
-}
-
-function calcularPagosTotalesPeriodo(pagos, periodo) {
-  var total = pagos.reduce(function (sum, p) {
-    if (!p.fecha || !estaEnPeriodo(p.fecha, periodo)) return sum;
-    return sum + (p.monto || 0);
-  }, 0);
-  return Math.round(total * 100) / 100;
-}
-
-function calcularMargen(ingresos, costos) {
-  if (!ingresos || ingresos === 0) return null;
-  return ((ingresos - costos) / ingresos) * 100;
 }
 
 function calcularTopCortes(cortes, prendasMap, periodo, n) {
@@ -276,21 +201,74 @@ function diasDesde(fechaISO) {
 }
 
 // ============================================================
+// HELPERS DE SCOPE — Cortes activos+terminados en el período
+// ============================================================
+
+function obtenerCortesEnScope(cortes, periodo) {
+  return cortes.filter(function (c) {
+    if (c.estado === "terminado") return c.fechaFinalizacion && estaEnPeriodo(c.fechaFinalizacion, periodo);
+    if (c.estado === "activo") return c.fechaCreacion && estaEnPeriodo(c.fechaCreacion, periodo);
+    return false;
+  });
+}
+
+function calcularIngresosScope(cortes, periodo) {
+  var cortesScope = obtenerCortesEnScope(cortes, periodo);
+  return cortesScope.reduce(function (sum, c) {
+    var cantidad = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
+    return sum + cantidad * (c.precioVentaUnitario || 0);
+  }, 0);
+}
+
+function calcularPagosPeriodo(pagos, periodo) {
+  return pagos.reduce(function (sum, p) {
+    if (!p.fecha || !estaEnPeriodo(p.fecha, periodo)) return sum;
+    return sum + (p.monto || 0);
+  }, 0);
+}
+
+function calcularGastosPeriodo(gastos, periodo) {
+  return gastos.reduce(function (sum, g) {
+    if (!g.fecha || !estaEnPeriodo(g.fecha, periodo)) return sum;
+    return sum + (g.monto || 0);
+  }, 0);
+}
+
+function calcularPorPagarScope(cortesScope, pagos) {
+  var manoObraCtv = 0;
+  cortesScope.forEach(function (c) {
+    (c.tareas || []).forEach(function (t) {
+      (t.asignaciones || []).forEach(function (a) {
+        manoObraCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
+      });
+    });
+  });
+  var manoObraBs = manoObraCtv / 100;
+  var scopeIds = new Set(cortesScope.map(function (c) { return c.id; }));
+  var totalPagado = pagos.reduce(function (sum, p) {
+    if (p.corteId && scopeIds.has(p.corteId)) return sum + (p.monto || 0);
+    return sum;
+  }, 0);
+  return manoObraBs - totalPagado;
+}
+
+// ============================================================
 // KPI AGGREGATOR
 // ============================================================
 
 function calcularKPIs(datos, periodo) {
-  var ingresos = calcularIngresosPeriodo(datos.cortes, periodo);
-  var costos = calcularPagosRealesPeriodo(datos.pagos, periodo) + calcularGastosPeriodo(datos.gastos, periodo);
+  var cortesScope = obtenerCortesEnScope(datos.cortes, periodo);
+  var ingresos = calcularIngresosScope(datos.cortes, periodo);
+  var egresos = calcularPagosPeriodo(datos.pagos, periodo) + calcularGastosPeriodo(datos.gastos, periodo);
+  var ganancia = ingresos - egresos;
+  var porPagar = calcularPorPagarScope(cortesScope, datos.pagos);
   return {
-    cortesActivos: datos.cortes.filter(function (c) { return c.estado === "activo"; }).length,
+    cortesActivos: cortesScope.filter(function (c) { return c.estado === "activo"; }).length,
+    finalizados: cortesScope.filter(function (c) { return c.estado === "terminado"; }).length,
     ingresosMes: ingresos,
-    costosMes: costos,
-    gananciaMes: ingresos - costos,
-    margen: calcularMargen(ingresos, costos),
-    pendiente: calcularPendienteTotal(datos.cortes, datos.pagos, datos.trabajadores),
-    finalizados: calcularCortesFinalizadosPeriodo(datos.cortes, periodo),
-    totalPagado: calcularPagosTotalesPeriodo(datos.pagos, periodo)
+    costosMes: egresos,
+    gananciaNeta: ganancia,
+    porPagar: porPagar
   };
 }
 
@@ -303,11 +281,6 @@ function formatBsValor(valor) {
   var abs = Math.abs(valor);
   var formatted = abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return (valor < 0 ? "-" : "") + "Bs " + formatted;
-}
-
-function formatMargen(margen) {
-  if (margen === null || margen === undefined) return "--";
-  return margen.toFixed(1) + "%";
 }
 
 function formatFechaCorta(fechaISO) {
@@ -345,12 +318,12 @@ export async function renderDashboard() {
 function cargarDatos() {
   return Promise.all([
     db.cortes.toArray(),
-    db.pagos.toArray(),
     db.prendas.toArray(),
     db.trabajadores.toArray(),
+    db.pagos.toArray(),
     db.gastos.toArray()
   ]).then(function (r) {
-    return { cortes: r[0], pagos: r[1], prendas: r[2], trabajadores: r[3], gastos: r[4] };
+    return { cortes: r[0], prendas: r[1], trabajadores: r[2], pagos: r[3], gastos: r[4] };
   });
 }
 
@@ -371,7 +344,6 @@ function buildDashboardHTML(datos) {
   var periodo = obtenerPeriodo(periodoActual);
   var kpis = calcularKPIs(datos, periodo);
   var prendasMap = new Map(datos.prendas.map(function (p) { return [p.id, p]; }));
-  var trabajadoresMap = new Map(datos.trabajadores.map(function (t) { return [t.id, t]; }));
 
   return buildPeriodSelectorHTML() +
     buildKPIsHTML(kpis) +
@@ -379,9 +351,7 @@ function buildDashboardHTML(datos) {
     buildCashSummaryHTML(kpis) +
     buildProgresoHTML(datos.cortes) +
     buildCortesRecientesHTML(datos.cortes, prendasMap, periodo) +
-    buildPagosRecientesHTML(datos.pagos, datos.cortes, trabajadoresMap, periodo) +
-    buildGastosRecientesHTML(datos.gastos, periodo) +
-    '<div class="app-version">v' + APP_VERSION + '</div>';
+    '<div class="app-version">v' + window.APP_VERSION + '</div>';
 }
 
 function buildPeriodSelectorHTML() {
@@ -395,56 +365,60 @@ function buildPeriodSelectorHTML() {
 }
 
 // ============================================================
-// KPI CARDS (8 tarjetas, 2 filas x 4 columnas)
+// KPI CARDS (6 tarjetas, 2 filas x 3 columnas)
 // ============================================================
 
 function buildKPIsHTML(kpis) {
-  var gananciaCls = kpis.gananciaMes >= 0 ? "kpi-card--positive" : "kpi-card--negative";
+  var claseGanancia = kpis.gananciaNeta >= 0 ? "kpi-card--positive" : "kpi-card--negative";
+  var clasePorPagar = kpis.porPagar > 0 ? "kpi-card--warning" : "";
 
   return '<div class="dash-kpis" id="dash-kpis">' +
 
-    // Fila 1 - Financiera
+    // Ingresos (Recibido)
     '<div class="kpi-card kpi-card--ingresos">' +
       '<div class="kpi-card__icon">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>' +
       '</div>' +
       '<div class="kpi-card__body">' +
-        '<span class="kpi-card__label">Ingresos</span>' +
+        '<span class="kpi-card__label">Recibido</span>' +
         '<span class="kpi-card__value">' + formatBsValor(kpis.ingresosMes) + '</span>' +
       '</div>' +
     '</div>' +
 
+    // Egresos (Costos)
     '<div class="kpi-card kpi-card--costos">' +
       '<div class="kpi-card__icon">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12 12 16 16 12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>' +
       '</div>' +
       '<div class="kpi-card__body">' +
-        '<span class="kpi-card__label">Costos</span>' +
+        '<span class="kpi-card__label">Egresos</span>' +
         '<span class="kpi-card__value">' + formatBsValor(kpis.costosMes) + '</span>' +
       '</div>' +
     '</div>' +
 
-    '<div class="kpi-card ' + gananciaCls + '">' +
+    // Ganancia (Balance)
+    '<div class="kpi-card ' + claseGanancia + '">' +
       '<div class="kpi-card__icon">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>' +
       '</div>' +
       '<div class="kpi-card__body">' +
-        '<span class="kpi-card__label">Ganancia Neta</span>' +
-        '<span class="kpi-card__value">' + formatBsValor(kpis.gananciaMes) + '</span>' +
+        '<span class="kpi-card__label">Ganancia</span>' +
+        '<span class="kpi-card__value">' + formatBsValor(kpis.gananciaNeta) + '</span>' +
       '</div>' +
     '</div>' +
 
-    '<div class="kpi-card">' +
+    // Por Pagar (Pendiente de pago)
+    '<div class="kpi-card ' + clasePorPagar + '">' +
       '<div class="kpi-card__icon">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4"/><path d="M4 6v12c0 1.1.9 2 2 2h14v-4"/><path d="M18 12a2 2 0 0 0-2 2c0 1.1.9 2 2 2h4v-4h-4z"/></svg>' +
       '</div>' +
       '<div class="kpi-card__body">' +
-        '<span class="kpi-card__label">Margen</span>' +
-        '<span class="kpi-card__value">' + formatMargen(kpis.margen) + '</span>' +
+        '<span class="kpi-card__label">Por Pagar</span>' +
+        '<span class="kpi-card__value">' + formatBsValor(kpis.porPagar) + '</span>' +
       '</div>' +
     '</div>' +
 
-    // Fila 2 - Operativa
+    // Cortes Activos
     '<div class="kpi-card">' +
       '<div class="kpi-card__icon">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/></svg>' +
@@ -455,16 +429,7 @@ function buildKPIsHTML(kpis) {
       '</div>' +
     '</div>' +
 
-    '<div class="kpi-card kpi-card--warning">' +
-      '<div class="kpi-card__icon">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>' +
-      '</div>' +
-      '<div class="kpi-card__body">' +
-        '<span class="kpi-card__label">Pendiente de Pago</span>' +
-        '<span class="kpi-card__value">' + formatBs(kpis.pendiente) + '</span>' +
-      '</div>' +
-    '</div>' +
-
+    // Finalizados
     '<div class="kpi-card">' +
       '<div class="kpi-card__icon">' +
         '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>' +
@@ -472,16 +437,6 @@ function buildKPIsHTML(kpis) {
       '<div class="kpi-card__body">' +
         '<span class="kpi-card__label">Finalizados</span>' +
         '<span class="kpi-card__value">' + kpis.finalizados + '</span>' +
-      '</div>' +
-    '</div>' +
-
-    '<div class="kpi-card">' +
-      '<div class="kpi-card__icon">' +
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>' +
-      '</div>' +
-      '<div class="kpi-card__body">' +
-        '<span class="kpi-card__label">Total Pagado</span>' +
-        '<span class="kpi-card__value">' + formatBs(kpis.totalPagado) + '</span>' +
       '</div>' +
     '</div>' +
 
@@ -563,8 +518,7 @@ function buildChartsHTML() {
 // ============================================================
 
 function buildCashSummaryHTML(kpis) {
-  var balance = kpis.ingresosMes - kpis.costosMes;
-  var balanceCls = balance >= 0 ? "cash-summary__balance--positive" : "cash-summary__balance--negative";
+  var balanceCls = kpis.gananciaNeta >= 0 ? "cash-summary__balance--positive" : "cash-summary__balance--negative";
 
   return '<div class="dash-section" id="dash-cash-summary">' +
     '<div class="dash-section__header">' +
@@ -583,7 +537,7 @@ function buildCashSummaryHTML(kpis) {
       '<div class="cash-summary__divider"></div>' +
       '<div class="cash-summary__item cash-summary__item--balance">' +
         '<span class="cash-summary__label">Balance</span>' +
-        '<span class="cash-summary__value ' + balanceCls + '">' + formatBsValor(balance) + '</span>' +
+        '<span class="cash-summary__value ' + balanceCls + '">' + formatBsValor(kpis.gananciaNeta) + '</span>' +
       '</div>' +
     '</div>' +
   '</div>';
@@ -687,122 +641,6 @@ function buildCortesRecientesHTML(cortes, prendasMap, periodo) {
 }
 
 // ============================================================
-// ÚLTIMOS PAGOS
-// ============================================================
-
-function buildPagosRecientesHTML(pagos, cortes, trabajadoresMap, periodo) {
-  var cortesMap = new Map(cortes.map(function (c) { return [c.id, c]; }));
-  var enPeriodo = pagos.filter(function (p) {
-    return estaEnPeriodo(p.fecha, periodo);
-  });
-
-  var recientes = enPeriodo
-    .slice()
-    .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); })
-    .slice(0, 5);
-
-  if (recientes.length === 0) {
-    return '<div class="dash-section" id="dash-pagos-recientes">' +
-      '<div class="dash-section__header">' +
-        '<h2 class="dash-section__title">Últimos Pagos</h2>' +
-        '<a class="dash-section__link" data-nav="#historial-pagos">Ver todos →</a>' +
-      '</div>' +
-      '<div class="card">' + estadoVacioHTML("Sin pagos en este período", "Registra tu primer pago") + '</div>' +
-    '</div>';
-  }
-
-  var html = '<div class="dash-section" id="dash-pagos-recientes">' +
-    '<div class="dash-section__header">' +
-      '<h2 class="dash-section__title">Últimos Pagos</h2>' +
-      '<a class="dash-section__link" data-nav="#historial-pagos">Ver todos →</a>' +
-    '</div>';
-
-  recientes.forEach(function (p) {
-    var trabajador = trabajadoresMap.get(p.trabajadorId);
-    var corte = cortesMap.get(p.corteId);
-    var nombreTrabajador = trabajador ? trabajador.nombre : "Trabajador eliminado";
-    var nombreCorte = corte ? (corte.nombreCorte || ("Corte #" + corte.id)) : "";
-    var fecha = formatFechaCorta(p.fecha);
-
-    html += '<div class="dash-list-item" data-nav="#historial-pagos">' +
-      '<div class="dash-list-item__info">' +
-        '<span class="dash-list-item__name">' + escaparHTML(nombreTrabajador) + '</span>' +
-        (nombreCorte ? '<span class="dash-list-item__detail">' + escaparHTML(nombreCorte) + '</span>' : '') +
-      '</div>' +
-      '<div class="dash-list-item__meta">' +
-        '<span class="dash-list-item__monto">' + formatBs(p.monto) + '</span>' +
-        '<span class="dash-list-item__fecha">' + fecha + '</span>' +
-      '</div>' +
-    '</div>';
-  });
-
-  html += '</div>';
-  return html;
-}
-
-// ============================================================
-// ULTIMOS GASTOS OPERATIVOS
-// ============================================================
-
-function buildGastosRecientesHTML(gastos, periodo) {
-  var CATEGORIAS_MAP = {
-    hilos: "Hilos",
-    aceite: "Aceite/Mantenimiento",
-    repuestos: "Repuestos",
-    servicios: "Servicios",
-    otros: "Otros"
-  };
-
-  var enPeriodo = (gastos || []).filter(function (g) {
-    return estaEnPeriodo(g.fecha, periodo);
-  });
-
-  var recientes = enPeriodo
-    .slice()
-    .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); })
-    .slice(0, 5);
-
-  if (recientes.length === 0) {
-    return '<div class="dash-section" id="dash-gastos-recientes">' +
-      '<div class="dash-section__header">' +
-        '<h2 class="dash-section__title">Ultimos Gastos</h2>' +
-        '<a class="dash-section__link" data-nav="#historial-pagos">Ver todos →</a>' +
-      '</div>' +
-      '<div class="card">' + estadoVacioHTML("Sin gastos en este periodo", "Registra tu primer gasto operativo") + '</div>' +
-    '</div>';
-  }
-
-  var html = '<div class="dash-section" id="dash-gastos-recientes">' +
-    '<div class="dash-section__header">' +
-      '<h2 class="dash-section__title">Ultimos Gastos</h2>' +
-      '<a class="dash-section__link" data-nav="#historial-pagos">Ver todos →</a>' +
-    '</div>';
-
-  recientes.forEach(function (g) {
-    var catLabel = CATEGORIAS_MAP[g.cat] || (g.cat || "Sin categoria");
-    var catClase = g.cat || "otros";
-    var fecha = formatFechaCorta(g.fecha);
-    var montoStr = "Bs " + (g.monto || 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-
-    html += '<div class="dash-list-item" data-nav="#historial-pagos">' +
-      '<div class="dash-list-item__info">' +
-        '<span class="dash-list-item__name">' + escaparHTML(g.descripcion || "Sin descripcion") + '</span>' +
-        '<span class="dash-list-item__detail">' +
-          '<span class="pg-gasto-card__cat pg-gasto-card__cat--' + catClase + '" style="display:inline-block;margin-right:4px;">' + escaparHTML(catLabel) + '</span>' +
-        '</span>' +
-      '</div>' +
-      '<div class="dash-list-item__meta">' +
-        '<span class="dash-list-item__monto" style="color:var(--color-primary);">' + montoStr + '</span>' +
-        '<span class="dash-list-item__fecha">' + fecha + '</span>' +
-      '</div>' +
-    '</div>';
-  });
-
-  html += '</div>';
-  return html;
-}
-
-// ============================================================
 // RENDER ALL CHARTS
 // ============================================================
 
@@ -832,10 +670,7 @@ function renderChartIngresosCostos(datos, periodo) {
 
   meses.forEach(function (m) {
     var ing = calcularIngresosMesCorte(datos.cortes, m.year, m.month);
-    var gast = calcularPagosRealesMes(datos.pagos, m.year, m.month) + calcularGastosMes(datos.gastos, m.year, m.month);
     ingresosData.push(ing);
-    costosData.push(gast);
-    gananciaData.push(ing - gast);
   });
 
   var ctx = canvas.getContext("2d");
@@ -850,32 +685,7 @@ function renderChartIngresosCostos(datos, periodo) {
           backgroundColor: "#4ECDC4",
           borderRadius: 4,
           barPercentage: 0.6,
-          categoryPercentage: 0.7,
-          order: 2
-        },
-        {
-          label: "Costos",
-          data: costosData,
-          backgroundColor: "#FF6B6B",
-          borderRadius: 4,
-          barPercentage: 0.6,
-          categoryPercentage: 0.7,
-          order: 3
-        },
-        {
-          label: "Ganancia",
-          data: gananciaData,
-          type: "line",
-          borderColor: "#FFB347",
-          backgroundColor: "rgba(255, 179, 71, 0.1)",
-          borderWidth: 2,
-          pointBackgroundColor: "#FFB347",
-          pointBorderColor: "#FFB347",
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          tension: 0.3,
-          fill: false,
-          order: 1
+          categoryPercentage: 0.7
         }
       ]
     },
@@ -991,8 +801,7 @@ function renderChartMargen(datos, periodo) {
 
   meses.forEach(function (m) {
     var ing = calcularIngresosMesCorte(datos.cortes, m.year, m.month);
-    var gast = calcularPagosRealesMes(datos.pagos, m.year, m.month) + calcularGastosMes(datos.gastos, m.year, m.month);
-    var mrg = ing > 0 ? ((ing - gast) / ing) * 100 : null;
+    var mrg = ing > 0 ? 100 : null;
     margenData.push(mrg);
   });
 
@@ -1089,19 +898,6 @@ function renderChartDistCostos(datos, periodo) {
       totalCostos += costoCtv;
     }
   });
-
-  // Agregar gastos operativos como segmento adicional
-  var gastosOperativosCtv = 0;
-  (datos.gastos || []).forEach(function (g) {
-    if (g.fecha && estaEnPeriodo(g.fecha, periodo)) {
-      gastosOperativosCtv += Math.round((g.monto || 0) * 100);
-    }
-  });
-  if (gastosOperativosCtv > 0) {
-    labels.push("Gastos Operativos");
-    costosData.push(gastosOperativosCtv);
-    totalCostos += gastosOperativosCtv;
-  }
 
   if (labels.length === 0) {
     chartInstances["chart-dist-costos"] = null;
@@ -1343,7 +1139,6 @@ function handleClick(e) {
     // Re-render KPIs, cash summary, progress, recent lists
     var kpis = calcularKPIs(datosDashboard, periodo);
     var prendasMap = new Map(datosDashboard.prendas.map(function (p) { return [p.id, p]; }));
-    var trabajadoresMap = new Map(datosDashboard.trabajadores.map(function (t) { return [t.id, t]; }));
     var container = document.querySelector(".dashboard-v2");
     if (!container) return;
 
@@ -1367,14 +1162,6 @@ function handleClick(e) {
     // Replace cortes recientes
     var cortesSection = container.querySelector("#dash-cortes-recientes");
     if (cortesSection) cortesSection.outerHTML = buildCortesRecientesHTML(datosDashboard.cortes, prendasMap, periodo);
-
-    // Replace últimos pagos
-    var pagosSection = container.querySelector("#dash-pagos-recientes");
-    if (pagosSection) pagosSection.outerHTML = buildPagosRecientesHTML(datosDashboard.pagos, datosDashboard.cortes, trabajadoresMap, periodo);
-
-    // Replace últimos gastos
-    var gastosSection = container.querySelector("#dash-gastos-recientes");
-    if (gastosSection) gastosSection.outerHTML = buildGastosRecientesHTML(datosDashboard.gastos, periodo);
 
     // Re-render period-dependent charts
     destruirCharts();

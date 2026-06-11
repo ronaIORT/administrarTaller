@@ -8,8 +8,8 @@ Aplicación web progresiva (PWA) para la gestión integral de un taller de costu
 - **SPA con hash routing** en `js/app.js`
 - **IndexedDB** con Dexie 4 (`js/db.js`) — sin datos semilla, BD arranca vacía
 - **Tema oscuro** mobile-first con CSS custom properties
-- **Service Worker** en `service-worker.js` — pre-cache de 38 assets, cache-first fetch, SPA fallback offline
-- **CDN**: Dexie 4, SheetJS (xlsx), jsPDF + AutoTable, Chart.js, Inter
+- **Service Worker** en `service-worker.js` — pre-cache con `Promise.allSettled`, cache-first fetch, SPA fallback offline
+- **CDN**: Dexie 4.0.8, SheetJS (xlsx), jsPDF + AutoTable, Chart.js, Inter
 
 ## Inicio rápido
 
@@ -27,7 +27,7 @@ manifest.json           → PWA manifest (nombre, iconos, theme-color)
 service-worker.js       → Install pre-cache, fetch cache-first, message skipWaiting
 js/
   app.js                → Router hash, bottom-nav singleton, registro SW + updatefound
-  db.js                 → Esquema Dexie (sin populate/seed)
+  db.js                 → Esquema Dexie multi-versión (v1→v4, sin populate/seed)
   utils.js              → Escape HTML, conversión y formateo de moneda
   views/
     shared.js           → Modal confirmar, toast, tabs, header, estado vacío
@@ -35,10 +35,9 @@ js/
     gestion-cortes.js   → Lista de cortes con filtros y progreso
     gestion-prendas.js  → CRUD prendas + importación Excel
     gestion-trabajadores.js → CRUD trabajadores
-    gestion-pagos.js    → Pagos (3 tabs: resumen, registrar, historial)
     nuevo-corte.js      → Crear corte (seleccionar prenda, tallas, tareas)
+    gestion-pagos/      → 3 tabs: Pagos, Gastos, Historial
     administrar-tareas/ → 5 tabs: resumen, corte, trabajador, editar, asignar
-    gestion-pagos/      → Tabs de pagos: resumen, registrar, historial
 css/
   style.css             → Cadena @import (variables → base → ... → views/*)
   variables.css         → Custom properties del tema oscuro
@@ -54,7 +53,7 @@ icons/                  → Iconos PWA (192x192, 512x512 PNG)
 | `#gestion-cortes` | Lista de cortes | Sí |
 | `#gestion-prendas` | CRUD prendas | Sí |
 | `#gestion-trabajadores` | CRUD trabajadores | Sí |
-| `#historial-pagos` | Pagos (3 tabs) | Sí |
+| `#gestion-pagos` | Pagos (3 tabs: Pagos, Gastos, Historial) | Sí |
 | `#nuevo-corte` | Formulario de corte | Oculto |
 | `#administrar-tareas/:id` | 5 tabs de gestión | Oculto |
 | `#nueva-prenda` / `#editar-prenda/:id` | Formulario prenda | Oculto |
@@ -65,9 +64,10 @@ icons/                  → Iconos PWA (192x192, 512x512 PNG)
 |---|---|---|---|
 | `precioUnitario` (tareas) | Centavos | Entero | `5` = 0.05 Bs |
 | `precioVentaUnitario` | Bolivianos | Decimal | `15.00` = 15 Bs |
-| `monto` (pagos) | Centavos | Entero | `2550` = 25.50 Bs |
+| `monto` (pagos) | Bolivianos | Decimal | `25.50` = 25.50 Bs |
+| `monto` (gastos) | Bolivianos | Decimal | `12.00` = 12.00 Bs |
 
-Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`.
+Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `formatBs()`, `formatBsCtv()`, `formatCtv()`, `formatCostoTotal()`, `formatNumero()`.
 
 ## Base de datos
 
@@ -77,8 +77,8 @@ Funciones en `js/utils.js`: `centavosABolivianos()`, `bolivianosACentavos()`, `f
 
 ## Service Worker
 
-- `CACHE_NAME = "taller-costura-v1.0"` — incrementar al modificar assets
-- **Install**: pre-cachea 38 assets locales, `skipWaiting()`
+- `CACHE_NAME` definido en `service-worker.js` — fuente única de verdad de la versión
+- **Install**: pre-cachea assets locales con `Promise.allSettled` + `cache.add()` individual, `skipWaiting()`
 - **Fetch**: cache-first (cache → network → cachea). Navegación offline → `index.html`
 - **Actualización**: `js/app.js` muestra banner "Nueva versión disponible" al detectar SW nuevo; botón "Recargar" fuerza activación
 
