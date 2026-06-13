@@ -22,6 +22,23 @@
     width: 100%;
 }
 
+/* Boton Importar en la barra de filtros */
+.cortes-filter-bar .btn--outline.btn--sm {
+    flex-shrink: 0;
+    margin-bottom: var(--space-2);
+}
+
+/* En mobile el boton importar se alinea junto al buscador */
+@media (max-width: 767px) {
+    .cortes-filter-bar {
+        flex-wrap: wrap;
+    }
+    .cortes-filter-bar #btn-importar-corte {
+        order: -1;
+        margin-bottom: var(--space-2);
+    }
+}
+
 /* ----- CHIPS DE FILTRO (TODOS / ACTIVOS / TERMINADOS / SEMANA) ----- */
 /* Scroll horizontal en mobile para todos los chips visibles. */
 
@@ -245,6 +262,7 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--space-2);
+    flex-wrap: wrap;
 }
 
 .corte-card__footer .btn--sm {

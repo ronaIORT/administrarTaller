@@ -2,7 +2,7 @@
 // DASHBOARD — KPIs, charts y resúmenes con período global
 // Período sticky afecta: KPIs financieros, charts 1/2/3/5,
 // caja y cortes recientes.
-// No afecta: Cortes Activos, Pendiente, Progreso.
+// No afecta: Progreso de Producción.
 // Charts: (1) Ingresos/Costos Bar+Line, (2) Rentabilidad HBar,
 //         (3) Margen Line, (4) Distribución Costos Doughnut,
 //         (5) Top 3 HBar
@@ -108,15 +108,6 @@ function obtenerUltimosMeses(n) {
 // CÁLCULOS FINANCIEROS
 // ============================================================
 
-function calcularIngresosPeriodo(cortes, periodo) {
-  return cortes.reduce(function (sum, c) {
-    if (c.estado !== "terminado" || !c.fechaFinalizacion) return sum;
-    if (!estaEnPeriodo(c.fechaFinalizacion, periodo)) return sum;
-    var cantidad = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
-    return sum + cantidad * (c.precioVentaUnitario || 0);
-  }, 0);
-}
-
 function calcularIngresosMesCorte(cortes, year, month) {
   return cortes.reduce(function (sum, c) {
     if (c.estado !== "terminado" || !c.fechaFinalizacion) return sum;
@@ -139,10 +130,20 @@ function calcularManoObraEstimadaPorPrenda(cortes) {
   return centavosABolivianos(centavos);
 }
 
-function calcularCortesFinalizadosPeriodo(cortes, periodo) {
-  return cortes.filter(function (c) {
-    return c.estado === "terminado" && c.fechaFinalizacion && estaEnPeriodo(c.fechaFinalizacion, periodo);
-  }).length;
+function calcularEgresosMes(datos, year, month) {
+  var pagos = datos.pagos.reduce(function (sum, p) {
+    if (!p.fecha) return sum;
+    var d = new Date(p.fecha);
+    if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
+    return sum + (p.monto || 0);
+  }, 0);
+  var gastos = datos.gastos.reduce(function (sum, g) {
+    if (!g.fecha) return sum;
+    var d = new Date(g.fecha);
+    if (d.getFullYear() !== year || (d.getMonth() + 1) !== month) return sum;
+    return sum + (g.monto || 0);
+  }, 0);
+  return pagos + gastos;
 }
 
 function calcularTopCortes(cortes, prendasMap, periodo, n) {
@@ -670,7 +671,10 @@ function renderChartIngresosCostos(datos, periodo) {
 
   meses.forEach(function (m) {
     var ing = calcularIngresosMesCorte(datos.cortes, m.year, m.month);
+    var eg = calcularEgresosMes(datos, m.year, m.month);
     ingresosData.push(ing);
+    costosData.push(eg);
+    gananciaData.push(ing - eg);
   });
 
   var ctx = canvas.getContext("2d");
@@ -685,7 +689,32 @@ function renderChartIngresosCostos(datos, periodo) {
           backgroundColor: "#4ECDC4",
           borderRadius: 4,
           barPercentage: 0.6,
-          categoryPercentage: 0.7
+          categoryPercentage: 0.7,
+          order: 2
+        },
+        {
+          label: "Costos",
+          data: costosData,
+          backgroundColor: "#FF6B6B",
+          borderRadius: 4,
+          barPercentage: 0.6,
+          categoryPercentage: 0.7,
+          order: 3
+        },
+        {
+          label: "Ganancia",
+          data: gananciaData,
+          type: "line",
+          borderColor: "#FFD93D",
+          backgroundColor: "rgba(255, 217, 61, 0.1)",
+          borderWidth: 2,
+          pointBackgroundColor: "#FFD93D",
+          pointBorderColor: "#FFD93D",
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          fill: false,
+          order: 1
         }
       ]
     },
@@ -801,7 +830,8 @@ function renderChartMargen(datos, periodo) {
 
   meses.forEach(function (m) {
     var ing = calcularIngresosMesCorte(datos.cortes, m.year, m.month);
-    var mrg = ing > 0 ? 100 : null;
+    var eg = calcularEgresosMes(datos, m.year, m.month);
+    var mrg = ing > 0 ? ((ing - eg) / ing) * 100 : null;
     margenData.push(mrg);
   });
 

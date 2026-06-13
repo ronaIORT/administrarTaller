@@ -426,7 +426,7 @@
   }
 
   .dash-kpis {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .kpi-card {
@@ -507,8 +507,6 @@
 .kpi-card:nth-child(4) { animation-delay: 0.20s; }
 .kpi-card:nth-child(5) { animation-delay: 0.25s; }
 .kpi-card:nth-child(6) { animation-delay: 0.30s; }
-.kpi-card:nth-child(7) { animation-delay: 0.35s; }
-.kpi-card:nth-child(8) { animation-delay: 0.40s; }
 
 @media (prefers-reduced-motion: reduce) {
   .kpi-card {
