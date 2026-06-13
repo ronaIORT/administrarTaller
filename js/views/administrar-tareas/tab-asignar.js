@@ -157,8 +157,16 @@ function renderizarHTMLTallasModoCrear(corte) {
     return '<p class="form-hint">Todas las tallas estan asignadas en este corte</p>';
   }
 
+  var sumaTotal = tallasVisibles.reduce(function (s, t) {
+    return s + t.cantidad;
+  }, 0);
+
   return (
-    '<label class="form-label">Tallas a asignar:</label>' +
+    '<label class="form-label" id="contador-tallas-label">Tallas: ' +
+    tallasVisibles.length +
+    " | Cantidad: " +
+    sumaTotal +
+    "</label>" +
     '<div class="at-asignar__tallas-grid">' +
     tallasVisibles
       .map(function (talla) {
@@ -209,8 +217,17 @@ function renderizarHTMLTallasModoExistente(corte, disponibles) {
     return '<p class="form-hint">No hay tallas disponibles para esta tarea</p>';
   }
 
+  var numTallasDisp = tallasVisibles.length;
+  var sumaDisp = tallasVisibles.reduce(function (s, t) {
+    return s + (disponibles[t.talla] || 0);
+  }, 0);
+
   return (
-    '<label class="form-label">Tallas a asignar:</label>' +
+    '<label class="form-label" id="contador-tallas-label">Tallas: ' +
+    numTallasDisp +
+    " | Cantidad: " +
+    sumaDisp +
+    "</label>" +
     '<div class="at-asignar__tallas-grid">' +
     tallasVisibles
       .map(function (talla) {
@@ -368,8 +385,29 @@ function modoExistente(corte, tarea, trabajadorId) {
 }
 
 /**
+ * Actualiza el contador de tallas/cantidad en tiempo real
+ * segun los valores actuales de los inputs de talla.
+ */
+function actualizarContadorTallas() {
+  var label = document.getElementById("contador-tallas-label");
+  if (!label) return;
+  var inputs = document.querySelectorAll(".at-asignar__talla-input");
+  var numTallas = 0;
+  var suma = 0;
+  inputs.forEach(function (input) {
+    var val = parseInt(input.value, 10) || 0;
+    if (val > 0) {
+      numTallas++;
+      suma += val;
+    }
+  });
+  label.textContent = "Tallas: " + numTallas + " | Cantidad: " + suma;
+}
+
+/**
  * Registra los event listeners de toggle en los botones de talla.
  * Cada click alterna entre 0 y el maximo configurado en data-max.
+ * Tambien registra listeners de input para actualizar el contador.
  */
 function configurarToggleTallas() {
   let labels = document.querySelectorAll(".at-asignar__talla-label");
@@ -389,6 +427,36 @@ function configurarToggleTallas() {
         input.value = 0;
         label.classList.remove("at-asignar__talla-label--filled");
       }
+      actualizarContadorTallas();
+    });
+  });
+
+  let inputs = document.querySelectorAll(".at-asignar__talla-input");
+  inputs.forEach(function (input) {
+    input.addEventListener("input", function () {
+      let tallaNombre = this.id.replace("input-talla-", "").replace(/-/g, " ");
+      let labelBtn = document.querySelector(
+        '.at-asignar__talla-label[data-talla="' + tallaNombre + '"]',
+      );
+      if (labelBtn) {
+        let val = parseInt(this.value, 10) || 0;
+        let max = parseInt(labelBtn.dataset.max, 10) || 0;
+
+        if (val > max && max > 0) {
+          mostrarToast(
+            "La cantidad excede el maximo disponible (" + max + ")",
+            "warning",
+          );
+          this.value = 0;
+          val = 0;
+          labelBtn.classList.remove("at-asignar__talla-label--filled");
+        } else if (val > 0 && val === max) {
+          labelBtn.classList.add("at-asignar__talla-label--filled");
+        } else {
+          labelBtn.classList.remove("at-asignar__talla-label--filled");
+        }
+      }
+      actualizarContadorTallas();
     });
   });
 }
