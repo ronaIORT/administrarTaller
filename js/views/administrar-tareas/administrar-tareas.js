@@ -278,6 +278,7 @@ function renderTabActivo() {
     case "trabajador":
       renderTabTrabajador(corteActual, tabContentEl, {
         trabajadoresMap: trabajadoresMap,
+        onDataChange: recargarCorte,
       });
       break;
     case "editar":

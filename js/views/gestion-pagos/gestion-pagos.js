@@ -218,7 +218,7 @@ function actualizarTabActivoUI(tabId) {
 // RENDER DEL TAB ACTIVO
 // ============================================================
 
-function renderTabActivo() {
+function renderTabActivo(preservarEstadoFiltros) {
   if (!tabContentEl) return;
 
   document.getElementById("pagos-fab-container")?.remove();
@@ -232,6 +232,7 @@ function renderTabActivo() {
         cortesMap: cortesMap,
         pagos: pagosCache,
         onDataChange: recargarYRender,
+        preservarEstadoFiltros: !!preservarEstadoFiltros,
       });
       break;
     case "gastos":
@@ -258,7 +259,7 @@ function renderTabActivo() {
 async function recargarYRender() {
   try {
     await recargarDatos();
-    renderTabActivo();
+    renderTabActivo(true);
   } catch (err) {
     console.error("Error recargando datos:", err);
     mostrarToast("Error al actualizar datos", "error");

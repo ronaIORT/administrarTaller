@@ -366,6 +366,30 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.at-trabajador__bloque-header:hover {
+  opacity: 0.85;
+}
+
+/* Chevron de colapsar/expandir */
+.at-trabajador__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-base) ease;
+  margin-right: var(--space-1);
+}
+
+.at-trabajador__bloque--collapsed .at-trabajador__chevron {
+  transform: rotate(-90deg);
+}
+
+/* Tabla oculta cuando el bloque esta colapsado */
+.at-trabajador__bloque--collapsed .at-trabajador__tabla {
+  display: none;
 }
 
 .at-trabajador__nombre {
@@ -412,6 +436,10 @@
   align-items: center;
 }
 
+.at-trabajador__tabla-row:hover {
+  background-color: var(--color-surface);
+}
+
 .at-trabajador__tallas {
   display: flex;
   flex-direction: column;
@@ -436,11 +464,17 @@
 /* Acciones: Copiar y Compartir */
 .at-trabajador__acciones {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
   margin-top: var(--space-2);
 }
 
-.at-trabajador__acciones .btn {
+.at-trabajador__acciones .btn-pagar-trab {
+  width: 100%;
+  flex: none;
+}
+
+.at-trabajador__acciones .btn:not(.btn-pagar-trab) {
   flex: 1;
 }
 

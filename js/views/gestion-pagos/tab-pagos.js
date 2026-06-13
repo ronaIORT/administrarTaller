@@ -13,9 +13,9 @@
 //     siempre permanecen visibles aunque pendiente = 0.
 // ============================================================
 
-import { db } from "../../db.js";
 import { escaparHTML, formatBs } from "../../utils.js";
 import { mostrarToast, estadoVacioHTML } from "../shared.js";
+import { abrirModalPagoShared } from "../shared-pagos.js";
 
 // ============================================================
 // ESTADO LOCAL DEL TAB
@@ -44,8 +44,10 @@ export function renderTabPagos(container, opciones) {
   var onDataChange = opciones.onDataChange;
   var cortesMapRecibido = opciones.cortesMap || {};
 
-  filtroActivo = "terminado";
-  corteSeleccionadoId = null;
+  if (!opciones.preservarEstadoFiltros) {
+    filtroActivo = "terminado";
+    corteSeleccionadoId = null;
+  }
   cortesMap = cortesMapRecibido;
 
   calcularDatos(trabajadoresMap, cortes, pagos);
@@ -53,8 +55,8 @@ export function renderTabPagos(container, opciones) {
   container.innerHTML =
     '<section class="pagos-filter-bar">' +
     '<div class="pagos-filter-chips" id="pagos-filter-chips">' +
-    '<button class="filter-chip active" data-filtro="terminado">Terminados</button>' +
-    '<button class="filter-chip" data-filtro="activo">Por terminar</button>' +
+    '<button class="filter-chip' + (filtroActivo === "terminado" ? " active" : "") + '" data-filtro="terminado">Terminados</button>' +
+    '<button class="filter-chip' + (filtroActivo === "activo" ? " active" : "") + '" data-filtro="activo">Por terminar</button>' +
     "</div>" +
     '<div class="pagos-corte-select-wrap">' +
     '<label for="pagos-corte-select">Corte:</label>' +
@@ -131,15 +133,10 @@ function poblarSelectCortes(cortes, pagos) {
 
   var html = '<option value="">Todos los cortes</option>';
   cortesDelEstado.forEach(function (c) {
-    var nombre = escaparHTML(c.nombreCorte || "Corte " + c.id);
     var pendienteCorte = calcularPendienteCorte(c, pagos);
-    if (pendienteCorte > 0) {
-      nombre += ' — pendiente ' + formatBs(pendienteCorte);
-    } else if (pendienteCorte < 0) {
-      nombre += ' — excedente ' + formatBs(Math.abs(pendienteCorte));
-    } else {
-      nombre += ' — pagado';
-    }
+    if (pendienteCorte <= 0) return;
+    var nombre = escaparHTML(c.nombreCorte || "Corte " + c.id);
+    nombre += ' — pendiente ' + formatBs(pendienteCorte);
     html += '<option value="' + c.id + '">' + nombre + '</option>';
   });
   select.innerHTML = html;
@@ -363,206 +360,13 @@ function renderWorkerList(trabajadoresMap) {
 function abrirModalPago(dato, workerNombre, onDataChange) {
   var corte = cortesMap[dato.corteId];
   var nombreCorte = corte ? (corte.nombreCorte || "Corte " + corte.id) : "Corte";
-  var sugerencia = dato.pending;
-  var maxPago = dato.pending;
-  var today = new Date().toISOString().split("T")[0];
 
-  var overlay = document.createElement("div");
-  overlay.className = "modal-overlay";
-  overlay.setAttribute("role", "dialog");
-  overlay.setAttribute("aria-modal", "true");
-  overlay.setAttribute("aria-labelledby", "pagos-modal-titulo");
-
-  overlay.innerHTML =
-    '<div class="modal">' +
-    '<div class="modal__header">' +
-    '<h3 id="pagos-modal-titulo" class="modal__title">Registrar Pago</h3>' +
-    "</div>" +
-    '<div class="modal__body">' +
-    '<div class="pagos-modal__info-row">' +
-    '<span class="pagos-modal__info-label">Trabajador</span>' +
-    '<span class="pagos-modal__info-value">' + escaparHTML(workerNombre) + "</span>" +
-    "</div>" +
-    '<div class="pagos-modal__corte-tag" title="' + escaparHTML(nombreCorte) + '">' +
-    "🧵 " + escaparHTML(nombreCorte) +
-    "</div>" +
-    '<div class="pagos-modal__pending-box">' +
-    '<div class="pagos-modal__pending-label">Pendiente en este corte</div>' +
-    '<div class="pagos-modal__pending-value">' + formatBs(sugerencia) + "</div>" +
-    "</div>" +
-    '<div class="form-group">' +
-    '<label for="pagos-modal-monto" class="form-label">Monto (Bs)</label>' +
-    '<input type="number" id="pagos-modal-monto" class="form-input" ' +
-    'value="' + (sugerencia > 0 ? sugerencia.toFixed(2) : "") + '" ' +
-    'min="0.01" max="' + (maxPago > 0 ? maxPago.toFixed(2) : "0.01") + '" step="0.01" autocomplete="off" />' +
-    '<p id="pagos-modal-error-monto" class="form-error" hidden></p>' +
-    "</div>" +
-    '<div class="form-group">' +
-    '<label for="pagos-modal-fecha" class="form-label">Fecha</label>' +
-    '<input type="date" id="pagos-modal-fecha" class="form-input" ' +
-    'value="' + today + '" />' +
-    "</div>" +
-    '<div class="form-group">' +
-    '<label for="pagos-modal-nota" class="form-label">Nota (opcional)</label>' +
-    '<textarea id="pagos-modal-nota" class="form-input" rows="2" ' +
-    'placeholder="Ej: Pago final, adelanto..." maxlength="200" autocomplete="off"></textarea>' +
-    "</div>" +
-    "</div>" +
-    '<div class="modal__footer">' +
-    '<button class="btn btn--secondary pagos-modal-cancelar">Cancelar</button>' +
-    '<button class="btn btn--primary pagos-modal-submit">Confirmar Pago</button>' +
-    "</div>" +
-    "</div>";
-
-  document.body.appendChild(overlay);
-  document.body.style.overflow = "hidden";
-
-  // Focus en el input de monto
-  requestAnimationFrame(function () {
-    document.getElementById("pagos-modal-monto").focus();
+  abrirModalPagoShared({
+    corteId: dato.corteId,
+    corteNombre: nombreCorte,
+    trabajadorId: dato.trabajadorId,
+    trabajadorNombre: workerNombre,
+    pending: dato.pending,
+    onDataChange: onDataChange,
   });
-
-  // Toggle monto al hacer click en el pending box
-  overlay.querySelector(".pagos-modal__pending-box").addEventListener("click", function () {
-    var inputMonto = document.getElementById("pagos-modal-monto");
-    limpiarError();
-    if (inputMonto.value) {
-      inputMonto.value = "";
-    } else {
-      inputMonto.value = sugerencia > 0 ? sugerencia.toFixed(2) : "";
-    }
-    inputMonto.focus();
-  });
-
-  var cerrar = function () {
-    overlay.classList.add("closing");
-    setTimeout(function () {
-      overlay.remove();
-      document.body.style.overflow = "auto";
-    }, 250);
-  };
-
-  var mostrarError = function (msg) {
-    var errorEl = document.getElementById("pagos-modal-error-monto");
-    var inputMonto = document.getElementById("pagos-modal-monto");
-    errorEl.textContent = msg;
-    errorEl.hidden = false;
-    inputMonto.classList.add("form-input--error");
-    inputMonto.focus();
-  };
-
-  var limpiarError = function () {
-    var errorEl = document.getElementById("pagos-modal-error-monto");
-    var inputMonto = document.getElementById("pagos-modal-monto");
-    errorEl.hidden = true;
-    inputMonto.classList.remove("form-input--error");
-  };
-
-  var confirmar = async function () {
-    limpiarError();
-
-    var inputMonto = document.getElementById("pagos-modal-monto");
-    var inputFecha = document.getElementById("pagos-modal-fecha");
-    var inputNota = document.getElementById("pagos-modal-nota");
-
-    var monto = parseFloat(inputMonto.value);
-    if (!monto || monto <= 0) {
-      mostrarError("Ingresa un monto valido mayor a 0");
-      return;
-    }
-
-    // Redondear a 2 decimales
-    monto = Math.round(monto * 100) / 100;
-
-    // Recalcular pendiente real desde la BD (anti race condition)
-    var pendienteReal;
-    try {
-      pendienteReal = await calcularPendienteActual(dato.corteId, dato.trabajadorId);
-    } catch (err) {
-      console.error("Error al verificar pendiente:", err);
-      mostrarError("No se pudo verificar el pendiente. Intenta de nuevo.");
-      return;
-    }
-
-    if (monto > pendienteReal) {
-      mostrarError("El monto no puede superar el pendiente actual (" + formatBs(pendienteReal) + ")");
-      return;
-    }
-
-    var fecha = inputFecha.value || new Date().toISOString().split("T")[0];
-    var nota = inputNota.value.trim() || null;
-
-    try {
-      await db.pagos.add({
-        corteId: dato.corteId,
-        trabajadorId: dato.trabajadorId,
-        monto: monto,
-        fecha: fecha,
-        nota: nota,
-      });
-      mostrarToast("Pago registrado: " + formatBs(monto), "success");
-      cerrar();
-      if (onDataChange) await onDataChange();
-    } catch (err) {
-      console.error("Error al registrar pago:", err);
-      mostrarToast("Error al registrar pago", "error");
-    }
-  };
-
-  overlay.querySelector(".pagos-modal-cancelar").addEventListener("click", cerrar);
-  overlay.querySelector(".pagos-modal-submit").addEventListener("click", confirmar);
-  overlay.addEventListener("click", function (e) {
-    if (e.target === overlay) cerrar();
-  });
-
-  // Enter en monto mueve a fecha, Enter en fecha confirma
-  overlay.querySelector("#pagos-modal-monto").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      document.getElementById("pagos-modal-fecha").focus();
-    }
-  });
-  overlay.querySelector("#pagos-modal-fecha").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      confirmar();
-    }
-  });
-
-  var escHandler = function (e) {
-    if (e.key === "Escape") {
-      cerrar();
-      document.removeEventListener("keydown", escHandler);
-    }
-  };
-  document.addEventListener("keydown", escHandler);
-}
-
-// ============================================================
-// QUERY FRESCA: pendiente actual para (corte, trabajador)
-// Usa la BD directamente para validar al confirmar el pago.
-// ============================================================
-
-async function calcularPendienteActual(corteId, trabajadorId) {
-  const pagosActuales = await db.pagos
-    .where({ corteId: corteId, trabajadorId: trabajadorId })
-    .toArray();
-  var totalPagado = 0;
-  pagosActuales.forEach(function (p) {
-    totalPagado += p.monto || 0;
-  });
-
-  const corte = await db.cortes.get(corteId);
-  if (!corte) return 0;
-
-  var ganadoCtv = 0;
-  (corte.tareas || []).forEach(function (t) {
-    (t.asignaciones || []).forEach(function (a) {
-      if (a.trabajadorId === trabajadorId) {
-        ganadoCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
-      }
-    });
-  });
-
-  return Math.max(0, ganadoCtv / 100 - totalPagado);
 }

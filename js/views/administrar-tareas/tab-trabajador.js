@@ -5,6 +5,7 @@
 // El texto generado usa emojis y formato para WhatsApp/Telegram.
 // ============================================================
 
+import { db } from "../../db.js";
 import {
   escaparHTML,
   formatBs,
@@ -13,13 +14,14 @@ import {
   centavosABolivianos,
 } from "../../utils.js";
 import { mostrarToast } from "../shared.js";
+import { abrirModalPagoShared } from "../shared-pagos.js";
 
 // ============================================================
 // RENDER PRINCIPAL
 // ============================================================
 
-export function renderTabTrabajador(corte, container, opciones) {
-  const { trabajadoresMap } = opciones;
+export async function renderTabTrabajador(corte, container, opciones) {
+  const { trabajadoresMap, onDataChange } = opciones;
 
   // Agrupar asignaciones por trabajadorId y luego por tarea
   // Estructura: { trabajadorId: { tareas: [{ tareaNombre, precioUnitario, tallas: [{ nombre, cantidadAsignada, totalCorte }], totalCtv }], totalCtv } }
@@ -69,6 +71,21 @@ export function renderTabTrabajador(corte, container, opciones) {
 
   const trabajadoresIds = Object.keys(agrupado);
 
+  // Cargar pagos de este corte para calcular pendientes
+  let pagosCorte = [];
+  try {
+    pagosCorte = await db.pagos.where({ corteId: corte.id }).toArray();
+  } catch (err) {
+    console.error("Error cargando pagos:", err);
+  }
+
+  // Calcular total pagado por trabajador (en Bs)
+  const pagadoPorTrabajador = {};
+  pagosCorte.forEach(function (p) {
+    if (!pagadoPorTrabajador[p.trabajadorId]) pagadoPorTrabajador[p.trabajadorId] = 0;
+    pagadoPorTrabajador[p.trabajadorId] += p.monto || 0;
+  });
+
   // Si no hay asignaciones
   if (trabajadoresIds.length === 0) {
     container.innerHTML =
@@ -93,6 +110,10 @@ export function renderTabTrabajador(corte, container, opciones) {
       trabajadoresMap[parseInt(tid)] || "Trabajador " + tid,
     );
     const totalTrabBs = centavosABolivianos(datos.totalCtv);
+
+    // Pendiente: ganado - pagado
+    const paidBs = pagadoPorTrabajador[parseInt(tid)] || 0;
+    const pending = Math.max(0, totalTrabBs - paidBs);
 
     // Tabla de tareas del trabajador
     const filasTarea = datos.tareas
@@ -127,9 +148,25 @@ export function renderTabTrabajador(corte, container, opciones) {
       })
       .join("");
 
+    // Boton Pagar (solo si hay pendiente > 0)
+    let btnPagarHTML = "";
+    if (pending > 0) {
+      btnPagarHTML =
+        '<button class="btn btn--primary btn--sm btn-pagar-trab" data-trabajador-id="' +
+        tid +
+        '" data-pending="' +
+        pending.toFixed(2) +
+        '">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>' +
+        " Pagar " +
+        formatBs(pending) +
+        "</button>";
+    }
+
     bloquesHTML +=
       '<div class="at-trabajador__bloque">' +
-      '<div class="at-trabajador__bloque-header">' +
+      '<div class="at-trabajador__bloque-header" role="button" tabindex="0" aria-expanded="true" title="Click para mostrar/ocultar tareas">' +
+      '<svg class="at-trabajador__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
       '<span class="at-trabajador__nombre">' +
       nombreTrab +
       "</span>" +
@@ -146,6 +183,7 @@ export function renderTabTrabajador(corte, container, opciones) {
       filasTarea +
       "</div>" +
       '<div class="at-trabajador__acciones">' +
+      btnPagarHTML +
       '<button class="btn btn--outline btn--sm btn-copiar-trab" data-trabajador-id="' +
       tid +
       '">' +
@@ -173,18 +211,47 @@ export function renderTabTrabajador(corte, container, opciones) {
     "</div>" +
     "</section>";
 
+  // Event listeners para colapsar/expandir bloques
+  container.querySelectorAll(".at-trabajador__bloque-header").forEach(function (header) {
+    header.addEventListener("click", function () {
+      const bloque = header.closest(".at-trabajador__bloque");
+      if (!bloque) return;
+      const isCollapsed = bloque.classList.toggle("at-trabajador__bloque--collapsed");
+      header.setAttribute("aria-expanded", isCollapsed ? "false" : "true");
+    });
+  });
+
   // Event listeners para Copiar y Compartir
   container.querySelectorAll(".btn-copiar-trab").forEach(function (btn) {
-    btn.addEventListener("click", function () {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
       const tid = parseInt(btn.dataset.trabajadorId);
       copiarAlPortapapeles(corte, agrupado[tid], trabajadoresMap[tid]);
     });
   });
 
   container.querySelectorAll(".btn-compartir-trab").forEach(function (btn) {
-    btn.addEventListener("click", function () {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
       const tid = parseInt(btn.dataset.trabajadorId);
       compartirWebShare(corte, agrupado[tid], trabajadoresMap[tid]);
+    });
+  });
+
+  // Event listeners para Pagar
+  container.querySelectorAll(".btn-pagar-trab").forEach(function (btn) {
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      const tid = parseInt(btn.dataset.trabajadorId);
+      const pending = parseFloat(btn.dataset.pending);
+      abrirModalPagoShared({
+        corteId: corte.id,
+        corteNombre: corte.nombreCorte || "Corte " + corte.id,
+        trabajadorId: tid,
+        trabajadorNombre: trabajadoresMap[tid] || "Trabajador " + tid,
+        pending: pending,
+        onDataChange: onDataChange,
+      });
     });
   });
 }
