@@ -23,8 +23,7 @@ const PERIODOS = [
   { id: "mes", label: "Este mes" },
   { id: "3meses", label: "3 meses" },
   { id: "6meses", label: "6 meses" },
-  { id: "anio", label: "Este año" },
-  { id: "todo", label: "Todo" }
+  { id: "anio", label: "Este año" }
 ];
 
 const CHART_IDS = ["chart-ingresos-costos", "chart-rentabilidad", "chart-margen", "chart-dist-costos", "chart-top-cortes"];
@@ -50,7 +49,6 @@ function obtenerPeriodo(id) {
     }
     case "anio":
       return { yearStart: y, monthStart: 1, yearEnd: y, monthEnd: m };
-    case "todo":
     default:
       return { yearStart: null, monthStart: null, yearEnd: null, monthEnd: null };
   }
