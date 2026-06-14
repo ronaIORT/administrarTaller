@@ -287,10 +287,17 @@
   border-top: 1px solid var(--color-divider);
   font-size: var(--font-size-sm);
   align-items: start;
+  cursor: pointer;
+  transition: background-color var(--transition-fast);
 }
 
 .at-corte-tabla__row:hover {
   background-color: var(--color-surface);
+}
+
+.at-corte-tabla__row.selected {
+  background-color: var(--color-primary-bg);
+  border-left: 3px solid var(--color-primary);
 }
 
 .at-corte-tabla__tarea {

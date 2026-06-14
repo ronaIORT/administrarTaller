@@ -274,6 +274,7 @@ function renderTabActivo() {
         onFinalizar: function () {
           return recargarCorte();
         },
+        onDataChange: recargarCorte,
       });
       break;
     case "trabajador":

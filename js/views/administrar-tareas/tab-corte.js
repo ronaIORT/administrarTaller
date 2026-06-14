@@ -4,18 +4,46 @@
 // trabajadores que participan con sus tallas.
 // En cortes activos: botones Asignar Tareas y Finalizar Corte.
 // En cortes terminados: badge "CORTE FINALIZADO".
+// Soporta seleccion de fila con FABs para Asignar y Eliminar Asignaciones.
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML, formatBs, formatCtv } from "../../utils.js";
+import { escaparHTML, formatCtv } from "../../utils.js";
 import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
+import { abrirModalAsignarTarea, confirmarEliminarAsignaciones } from "./asignacion-compartida.js";
+
+// ============================================================
+// CONSTANTES DEL MODULO
+// ============================================================
+
+/** ID del contenedor de FABs para este tab */
+const CORTE_FAB_CONTAINER_ID = "at-corte-fab-container";
+
+/** Indice de la fila de tarea seleccionada */
+let filaCorteSeleccionadaIdx = null;
+
+/** Timeout para ocultar FABs con animacion */
+let ocultarCorteFABsTimeout = null;
+
+/** Referencia a onDataChange para FABs que no lo reciben directamente */
+let onDataChangeCorteRef = null;
+
+/** Mapa trabajadorId -> nombre para delegar a modales */
+let trabajadoresMapCorteRef = null;
 
 // ============================================================
 // RENDER PRINCIPAL
 // ============================================================
 
 export function renderTabCorte(corte, container, opciones) {
-  const { trabajadoresMap, onCambiarTab, onFinalizar } = opciones;
+  const { trabajadoresMap, onCambiarTab, onFinalizar, onDataChange } = opciones;
+
+  onDataChangeCorteRef = onDataChange || null;
+  trabajadoresMapCorteRef = trabajadoresMap || {};
+
+  // Limpiar FABs del estado anterior
+  document.getElementById(CORTE_FAB_CONTAINER_ID)?.remove();
+  filaCorteSeleccionadaIdx = null;
 
   const esTerminado = corte.estado === "terminado";
   const progreso = calcularProgreso(corte);
@@ -43,8 +71,7 @@ export function renderTabCorte(corte, container, opciones) {
   let filasHTML = "";
   if (corte.tareas && corte.tareas.length > 0) {
     filasHTML = corte.tareas
-      .map(function (tarea) {
-        // Construir pares alineados Talla-Trabajador
+      .map(function (tarea, idx) {
         const lineasPares = (tarea.asignaciones || []).map(function (a) {
           const totalCorte =
             (
@@ -89,7 +116,7 @@ export function renderTabCorte(corte, container, opciones) {
             : '<span class="at-corte-tabla__linea" style="color:var(--color-text-muted);">Sin asignar</span>';
 
         return (
-          '<div class="at-corte-tabla__row">' +
+          '<div class="at-corte-tabla__row" data-idx="' + idx + '">' +
           '<div class="at-corte-tabla__tarea">' +
           "<span>" +
           escaparHTML(tarea.nombre || "Sin nombre") +
@@ -152,8 +179,10 @@ export function renderTabCorte(corte, container, opciones) {
     "<span>Tallas</span>" +
     "<span>Trabajadores</span>" +
     "</div>" +
+    '<div id="at-corte-tabla-body">' +
     (filasHTML ||
       '<div class="at-corte-tabla__row" style="color:var(--color-text-muted);grid-template-columns:1fr;">Sin tareas registradas</div>') +
+    "</div>" +
     "</div>" +
     // Botones de accion (solo en cortes activos)
     (esTerminado
@@ -238,6 +267,130 @@ export function renderTabCorte(corte, container, opciones) {
       });
     }
   }
+
+  // ============================================================
+  // SELECCION DE FILA + FABs
+  // ============================================================
+
+  const tablaBody = document.getElementById("at-corte-tabla-body");
+  if (tablaBody) {
+    tablaBody.addEventListener("click", function (e) {
+      const row = e.target.closest(".at-corte-tabla__row");
+      if (!row || !row.dataset.idx) return;
+      const idx = parseInt(row.dataset.idx, 10);
+      seleccionarFilaCorte(corte, idx);
+    });
+  }
+
+  // Click fuera para deseleccionar
+  document.addEventListener("click", function handler(e) {
+    if (!e.target.closest(".at-corte-tabla__row") && !e.target.closest("#" + CORTE_FAB_CONTAINER_ID)) {
+      deseleccionarFilaCorte();
+    }
+  });
+}
+
+// ============================================================
+// SELECCION DE FILA
+// ============================================================
+
+function seleccionarFilaCorte(corte, idx) {
+  deseleccionarFilaCorte();
+  filaCorteSeleccionadaIdx = idx;
+
+  const row = document.querySelector('.at-corte-tabla__row[data-idx="' + idx + '"]');
+  if (row) row.classList.add("selected");
+
+  mostrarFABsCorte(corte, idx);
+}
+
+function deseleccionarFilaCorte() {
+  const row = document.querySelector(".at-corte-tabla__row.selected");
+  if (row) row.classList.remove("selected");
+  filaCorteSeleccionadaIdx = null;
+  ocultarFABsCorte();
+}
+
+// ============================================================
+// FABs - Mostrar / ocultar acciones flotantes
+// ============================================================
+
+function mostrarFABsCorte(corte, idx) {
+  if (ocultarCorteFABsTimeout) {
+    clearTimeout(ocultarCorteFABsTimeout);
+    ocultarCorteFABsTimeout = null;
+  }
+
+  // Solo en cortes activos
+  if (corte.estado === "terminado") return;
+
+  const tarea = (corte.tareas || [])[idx];
+  if (!tarea) return;
+
+  const totalAsignado = (tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+  const unidadesTotales = tarea.unidadesTotales || 0;
+  const tieneAsignaciones = totalAsignado > 0;
+  const estaCompleta = totalAsignado >= unidadesTotales;
+
+  let fabContainer = document.getElementById(CORTE_FAB_CONTAINER_ID);
+  if (fabContainer) fabContainer.remove();
+
+  fabContainer = document.createElement("div");
+  fabContainer.id = CORTE_FAB_CONTAINER_ID;
+  fabContainer.className = "tareas-fab-container";
+
+  fabContainer.innerHTML =
+    (!estaCompleta
+      ? '<button class="tarea-fab-btn tarea-fab-assign" aria-label="Asignar tarea">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>' +
+        '</button>'
+      : "") +
+    (tieneAsignaciones
+      ? '<button class="tarea-fab-btn tarea-fab-clear-assign" aria-label="Eliminar asignaciones">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>' +
+        '</button>'
+      : "");
+
+  // Si no hay botones que mostrar, no agregar FAB
+  if (!fabContainer.innerHTML.trim()) return;
+
+  document.body.appendChild(fabContainer);
+
+  // Event listeners de FABs
+  const fabAssign = fabContainer.querySelector(".tarea-fab-assign");
+  if (fabAssign) {
+    fabAssign.addEventListener("click", function () {
+      if (filaCorteSeleccionadaIdx !== null) {
+        abrirModalAsignarTarea(corte, filaCorteSeleccionadaIdx, onDataChangeCorteRef, trabajadoresMapCorteRef);
+      }
+    });
+  }
+
+  const fabClearAssign = fabContainer.querySelector(".tarea-fab-clear-assign");
+  if (fabClearAssign) {
+    fabClearAssign.addEventListener("click", function () {
+      if (filaCorteSeleccionadaIdx !== null) {
+        confirmarEliminarAsignaciones(corte, filaCorteSeleccionadaIdx, onDataChangeCorteRef);
+      }
+    });
+  }
+
+  fabContainer.classList.remove("visible");
+  requestAnimationFrame(function () {
+    fabContainer.classList.add("visible");
+  });
+}
+
+function ocultarFABsCorte() {
+  const fabContainer = document.getElementById(CORTE_FAB_CONTAINER_ID);
+  if (!fabContainer) return;
+
+  fabContainer.classList.remove("visible");
+  ocultarCorteFABsTimeout = setTimeout(function () {
+    const contenedor = document.getElementById(CORTE_FAB_CONTAINER_ID);
+    if (contenedor) contenedor.remove();
+    ocultarCorteFABsTimeout = null;
+  }, 300);
 }
 
 // ============================================================
