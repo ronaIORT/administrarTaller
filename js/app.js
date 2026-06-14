@@ -27,7 +27,6 @@ const RUTA_A_NAV = {
 
 function init() {
   registrarServiceWorker();
-  bloquearOrientacion();
   esperarVersion()
     .then(() => {
       cargarVista(location.hash || "#dashboard");
@@ -37,13 +36,6 @@ function init() {
   });
 }
 
-function bloquearOrientacion() {
-  if (screen.orientation && screen.orientation.lock) {
-    screen.orientation.lock("portrait").catch(function () {
-      // Silenciar errores - requiere HTTPS y/o modo standalone
-    });
-  }
-}
 
 // ============================================================
 // ESPERAR VERSIÓN - Espera a que el SW envíe la versión
