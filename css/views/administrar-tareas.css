@@ -195,6 +195,23 @@
   font-size: var(--font-size-md);
 }
 
+.at-resumen__financiero-valor-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-editar-precio-venta {
+  padding: 2px 6px;
+  font-size: var(--font-size-xs);
+  opacity: 0.6;
+  transition: opacity var(--transition-fast);
+}
+
+.btn-editar-precio-venta:hover {
+  opacity: 1;
+}
+
 /* Botones de accion */
 .at-resumen__acciones {
   display: flex;

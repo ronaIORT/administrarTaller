@@ -14,7 +14,7 @@ import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
 // ============================================================
 
 export function renderTabResumen(corte, container, opciones) {
-  const { prenda, trabajadoresMap } = opciones;
+  const { prenda, trabajadoresMap, onDataChange } = opciones;
 
   const cantidadPrendas = corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0);
   const esTerminado = corte.estado === "terminado";
@@ -115,7 +115,12 @@ export function renderTabResumen(corte, container, opciones) {
     '</div>' +
     '<div class="at-resumen__financiero-fila">' +
     '<span class="at-resumen__financiero-label">Precio venta unitario</span>' +
+    '<span class="at-resumen__financiero-valor-group">' +
     '<span class="at-resumen__financiero-valor">' + (corte.precioVentaUnitario || 0).toFixed(2) + ' Bs</span>' +
+    '<button class="btn btn--ghost btn--sm btn-editar-precio-venta" aria-label="Editar precio de venta" title="Editar precio">' +
+    '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+    '</button>' +
+    '</span>' +
     '</div>' +
     '<div class="at-resumen__financiero-fila">' +
     '<span class="at-resumen__financiero-label">Venta total</span>' +
@@ -152,6 +157,10 @@ export function renderTabResumen(corte, container, opciones) {
       confirmarFinalizarCorte(corte, opciones.onFinalizar);
     });
   }
+
+  document.getElementById("btn-editar-precio-venta").addEventListener("click", function () {
+    abrirModalEditarPrecioVenta(corte, onDataChange);
+  });
 }
 
 // ============================================================
@@ -500,6 +509,87 @@ function confirmarFinalizarCorte(corte, onFinalizar) {
   });
 
   var escHandler = function (e) {
+    if (e.key === "Escape") {
+      cerrar();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  document.addEventListener("keydown", escHandler);
+}
+
+// ============================================================
+// MODAL EDITAR PRECIO VENTA UNITARIO
+// ============================================================
+
+function abrirModalEditarPrecioVenta(corte, onDataChange) {
+  const overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "modal-precio-venta-titulo");
+
+  const precioActual = (corte.precioVentaUnitario || 0).toFixed(2);
+
+  overlay.innerHTML =
+    '<div class="modal modal--sm">' +
+    '<div class="modal__header">' +
+    '<h3 id="modal-precio-venta-titulo" class="modal__title">Editar Precio de Venta Unitario</h3>' +
+    '</div>' +
+    '<div class="modal__body">' +
+    '<div class="form-group">' +
+    '<label for="input-precio-venta-unitario" class="form-label">Precio de venta (Bs)</label>' +
+    '<input type="number" id="input-precio-venta-unitario" class="form-input" value="' + precioActual + '" min="0" max="99999" step="0.01" autocomplete="off" />' +
+    '</div>' +
+    '</div>' +
+    '<div class="modal__footer">' +
+    '<button class="btn btn--secondary modal-cancelar">Cancelar</button>' +
+    '<button class="btn btn--primary modal-guardar">Guardar</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = "hidden";
+
+  const input = overlay.querySelector("#input-precio-venta-unitario");
+  requestAnimationFrame(function () { input.focus(); input.select(); });
+
+  const cerrar = function () {
+    overlay.classList.add("closing");
+    setTimeout(function () {
+      overlay.remove();
+      document.body.style.overflow = "auto";
+    }, 250);
+  };
+
+  const guardar = async function () {
+    const nuevoPrecio = parseFloat(input.value) || 0;
+    if (nuevoPrecio < 0) {
+      mostrarToast("El precio no puede ser negativo", "warning");
+      input.focus();
+      return;
+    }
+    try {
+      await db.cortes.update(corte.id, { precioVentaUnitario: nuevoPrecio });
+      cerrar();
+      mostrarToast("Precio de venta actualizado", "success");
+      if (onDataChange) await onDataChange();
+    } catch (err) {
+      console.error("Error al actualizar precio de venta:", err);
+      mostrarToast("Error al guardar", "error");
+    }
+  };
+
+  overlay.querySelector(".modal-cancelar").addEventListener("click", cerrar);
+  overlay.querySelector(".modal-guardar").addEventListener("click", guardar);
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) cerrar();
+  });
+
+  input.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); guardar(); }
+  });
+
+  const escHandler = function (e) {
     if (e.key === "Escape") {
       cerrar();
       document.removeEventListener("keydown", escHandler);
