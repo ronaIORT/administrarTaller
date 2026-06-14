@@ -429,6 +429,22 @@
   background-color: #ff8066;
 }
 
+.tarea-fab-assign {
+  background-color: var(--color-success);
+}
+
+.tarea-fab-assign:hover {
+  background-color: #4caf50;
+}
+
+.tarea-fab-clear-assign {
+  background-color: var(--color-warning, #e6a700);
+}
+
+.tarea-fab-clear-assign:hover {
+  background-color: #cc9500;
+}
+
 @media (min-width: 1024px) {
   .lista-prendas {
     display: grid;
@@ -442,14 +458,6 @@
   }
 
   .prendas-fab-container {
-    display: none !important;
-  }
-
-  .tarea-tabla-acciones {
-    display: flex;
-  }
-
-  .tareas-fab-container {
     display: none !important;
   }
 }

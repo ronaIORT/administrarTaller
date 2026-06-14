@@ -221,12 +221,4 @@
   .tallas-input-row .form-input:nth-child(2) {
     width: 120px;
   }
-
-  .tarea-tabla-acciones {
-    display: flex;
-  }
-
-  .tareas-fab-container {
-    display: none !important;
-  }
 }

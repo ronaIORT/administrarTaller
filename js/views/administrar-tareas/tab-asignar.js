@@ -8,7 +8,7 @@
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML } from "../../utils.js";
+import { escaparHTML, formatBsCtv } from "../../utils.js";
 import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
 
 // ============================================================
@@ -27,66 +27,58 @@ let ocultarAsignarFABsTimeout = null;
 /** AbortController para limpiar listener de click-outside */
 let outsideClickAbortControllerAT = null;
 
+/** Precio unitario de la tarea actualmente seleccionada (en centavos) */
+let precioActualCtv = 0;
+
 // ============================================================
 // HELPERS DE DISPONIBILIDAD
 // ============================================================
 
 /**
- * Devuelve las tareas del corte que aun NO tienen asignaciones
- * del trabajador indicado. Se usa para poblar el select de tarea
- * cuando se elige un trabajador.
- * @param {Object} corte - Corte con array tareas[] y asignaciones[]
- * @param {number} trabajadorId
- * @returns {Array} - Tareas disponibles para ese trabajador
+ * Devuelve las tareas que aun tienen al menos una talla con unidades
+ * disponibles (global, sin importar trabajador). Se usa para poblar
+ * el select de tareas: solo tareas que no estan completamente asignadas.
+ * @param {Object} corte - Corte con array tallas[] y tareas[]
+ * @returns {Array} - Tareas con capacidad restante
  */
-function getTareasNoAsignadasATrabajador(corte, trabajadorId) {
+function getTareasDisponibles(corte) {
   return (corte.tareas || []).filter(function (tarea) {
-    return !(tarea.asignaciones || []).some(function (a) {
-      return a.trabajadorId === trabajadorId;
+    let asignadas = {};
+    (tarea.asignaciones || []).forEach(function (a) {
+      if (a.talla) {
+        asignadas[a.talla] = (asignadas[a.talla] || 0) + (a.cantidad || 0);
+      }
+    });
+    return (corte.tallas || []).some(function (t) {
+      let restante = t.cantidad - (asignadas[t.talla] || 0);
+      return restante > 0;
     });
   });
 }
 
 /**
- * Calcula cuantas unidades de cada talla quedan libres para una tarea.
- * Parte del total del corte por talla y resta lo ya asignado por
- * cualquier trabajador en esa tarea.
+ * Calcula las unidades disponibles por talla para un trabajador
+ * especifico en una tarea. Resta del total del corte todas las
+ * asignaciones existentes (de todos los trabajadores) en esa tarea.
  * @param {Object} corte - Corte con array tallas[]
  * @param {Object} tarea - Tarea con array asignaciones[]
  * @returns {Object} - Mapa { nombreTalla: cantidadDisponible }
  */
 function getTallasDisponiblesParaTarea(corte, tarea) {
-  const disponibles = {};
-
-  // Inicializar con el total del corte por talla
-  (corte.tallas || []).forEach(function (t) {
-    disponibles[t.talla] = t.cantidad;
-  });
-
-  // Restar lo ya asignado en esta tarea
+  let asignadas = {};
   (tarea.asignaciones || []).forEach(function (a) {
-    if (a.talla && disponibles.hasOwnProperty(a.talla)) {
-      disponibles[a.talla] -= a.cantidad || 0;
+    if (a.talla) {
+      asignadas[a.talla] = (asignadas[a.talla] || 0) + (a.cantidad || 0);
     }
   });
-
+  let disponibles = {};
+  (corte.tallas || []).forEach(function (t) {
+    disponibles[t.talla] = Math.max(0, t.cantidad - (asignadas[t.talla] || 0));
+  });
   return disponibles;
 }
 
-/**
- * Determina si una tarea tiene al menos una talla con cantidad disponible.
- * Se usa para filtrar el select de tareas: solo mostrar tareas que aun
- * pueden recibir asignaciones.
- * @param {Object} corte - Corte con array tallas[]
- * @param {Object} tarea - Tarea con array asignaciones[]
- * @returns {boolean}
- */
-function tieneAlgunaTallaDisponible(corte, tarea) {
-  let disponibles = getTallasDisponiblesParaTarea(corte, tarea);
-  return Object.keys(disponibles).some(function (talla) {
-    return disponibles[talla] > 0;
-  });
-}
+
 
 /**
  * Agrupa las asignaciones del corte por (trabajadorId, indiceTarea)
@@ -99,7 +91,6 @@ function agruparAsignacionesPorTrabajador(corte, trabajadoresMap) {
   let grupos = [];
 
   (corte.tareas || []).forEach(function (tarea, tareaIdx) {
-    // Agrupar asignaciones de esta tarea por trabajador
     let porTrabajador = {};
     (tarea.asignaciones || []).forEach(function (a) {
       let key = a.trabajadorId;
@@ -113,7 +104,6 @@ function agruparAsignacionesPorTrabajador(corte, trabajadoresMap) {
       let trabajadorId = parseInt(tId, 10);
       let asignaciones = porTrabajador[tId];
 
-      // Construir cadena de tallas apiladas: S (10), M (5)
       let tallasStr = asignaciones
         .map(function (a) {
           if (a.talla) {
@@ -123,6 +113,11 @@ function agruparAsignacionesPorTrabajador(corte, trabajadoresMap) {
         })
         .join("");
 
+      // Fecha mas reciente entre todas las asignaciones del grupo
+      let fechaMasReciente = asignaciones.reduce(function (max, a) {
+        return (a.fecha || "") > max ? a.fecha : max;
+      }, "");
+
       grupos.push({
         trabajadorId: trabajadorId,
         trabajadorNombre:
@@ -130,8 +125,15 @@ function agruparAsignacionesPorTrabajador(corte, trabajadoresMap) {
         tareaIdx: tareaIdx,
         tareaNombre: tarea.nombre || "Sin nombre",
         tallasStr: tallasStr,
+        fechaMasReciente: fechaMasReciente,
       });
     });
+  });
+
+  // Ordenar por asignacion mas reciente primero
+  grupos.sort(function (a, b) {
+    return b.fechaMasReciente > a.fechaMasReciente ? 1 :
+           b.fechaMasReciente < a.fechaMasReciente ? -1 : 0;
   });
 
   return grupos;
@@ -160,12 +162,15 @@ function renderizarHTMLTallasModoCrear(corte) {
   var sumaTotal = tallasVisibles.reduce(function (s, t) {
     return s + t.cantidad;
   }, 0);
+  var totalCtvCrear = sumaTotal * precioActualCtv;
 
   return (
     '<label class="form-label" id="contador-tallas-label">Tallas: ' +
     tallasVisibles.length +
     " | Cantidad: " +
     sumaTotal +
+    " | Total: " +
+    formatBsCtv(totalCtvCrear) +
     "</label>" +
     '<div class="at-asignar__tallas-grid">' +
     tallasVisibles
@@ -221,12 +226,15 @@ function renderizarHTMLTallasModoExistente(corte, disponibles) {
   var sumaDisp = tallasVisibles.reduce(function (s, t) {
     return s + (disponibles[t.talla] || 0);
   }, 0);
+  var totalCtvExistente = sumaDisp * precioActualCtv;
 
   return (
     '<label class="form-label" id="contador-tallas-label">Tallas: ' +
     numTallasDisp +
     " | Cantidad: " +
     sumaDisp +
+    " | Total: " +
+    formatBsCtv(totalCtvExistente) +
     "</label>" +
     '<div class="at-asignar__tallas-grid">' +
     tallasVisibles
@@ -299,6 +307,43 @@ function ocultarCamposAsignacion() {
   if (grupoPrecio) grupoPrecio.style.display = "none";
   if (tallasContainer) tallasContainer.innerHTML = "";
   if (errorEl) errorEl.hidden = true;
+  precioActualCtv = 0;
+}
+
+/**
+ * Centraliza la logica de mostrar/ocultar campos de asignacion
+ * segun los selects de trabajador y tarea.
+ * Si ambos selects tienen valor, muestra los campos correspondientes.
+ * Si falta alguno, oculta todo y resetea el boton submit.
+ */
+function actualizarCamposAsignacion(corte) {
+  let selectTrabajador = document.getElementById("select-asignar-trabajador");
+  let selectTarea = document.getElementById("select-asignar-tarea");
+  let btnSubmit = document.getElementById("btn-submit-asignacion");
+
+  let trabajadorId = selectTrabajador && selectTrabajador.value
+    ? parseInt(selectTrabajador.value, 10) : null;
+  let tareaValue = selectTarea ? selectTarea.value : "";
+
+  if (!trabajadorId || !tareaValue) {
+    ocultarCamposAsignacion();
+    if (btnSubmit) btnSubmit.disabled = true;
+    return;
+  }
+
+  if (btnSubmit) btnSubmit.disabled = false;
+
+  if (tareaValue === "__nueva__") {
+    modoCrearInine(corte, trabajadorId);
+  } else {
+    let tareaId = parseInt(tareaValue, 10);
+    let tarea = (corte.tareas || []).find(function (t) {
+      return t.id === tareaId;
+    });
+    if (tarea) {
+      modoExistente(corte, tarea, trabajadorId);
+    }
+  }
 }
 
 /**
@@ -308,7 +353,8 @@ function ocultarCamposAsignacion() {
  * @param {number} trabajadorId - ID del trabajador seleccionado
  */
 function modoCrearInine(corte, trabajadorId) {
-  // Mostrar input de nombre
+  precioActualCtv = 0;
+
   let grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
   let inputNombre = document.getElementById("input-asignar-nombre-tarea");
   grupoNombre.style.display = "";
@@ -351,34 +397,26 @@ function modoCrearInine(corte, trabajadorId) {
  * @param {number} trabajadorId - ID del trabajador seleccionado
  */
 function modoExistente(corte, tarea, trabajadorId) {
-  // Ocultar input de nombre
   let grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
   grupoNombre.style.display = "none";
 
-  // Mostrar precio pre-rellenado con el de la tarea
   let grupoPrecio = document.getElementById("grupo-precio-asignar");
   let inputPrecio = document.getElementById("input-asignar-precio");
   grupoPrecio.style.display = "";
   inputPrecio.value = tarea.precioUnitario || 0;
+  precioActualCtv = tarea.precioUnitario || 0;
 
-  // Renderizar tallas con disponibles o cantidad global
   let tallasContainer = document.getElementById("asignar-tallas-container");
   if (corte.tallas && corte.tallas.length > 0) {
     let disponibles = getTallasDisponiblesParaTarea(corte, tarea);
-    tallasContainer.innerHTML = renderizarHTMLTallasModoExistente(
-      corte,
-      disponibles,
-    );
+    tallasContainer.innerHTML = renderizarHTMLTallasModoExistente(corte, disponibles);
     configurarToggleTallas();
   } else {
-    let totalDisponible =
-      (tarea.unidadesTotales || 0) -
-      (tarea.asignaciones || []).reduce(function (s, a) {
-        return s + (a.cantidad || 0);
-      }, 0);
-    tallasContainer.innerHTML = renderizarHTMLCantidadGlobal(
-      Math.max(0, totalDisponible),
-    );
+    let asignadasGlobal = (tarea.asignaciones || []).reduce(function (s, a) {
+      return s + (a.cantidad || 0);
+    }, 0);
+    let totalDisponible = Math.max(0, (tarea.unidadesTotales || 0) - asignadasGlobal);
+    tallasContainer.innerHTML = renderizarHTMLCantidadGlobal(totalDisponible);
   }
 
   document.getElementById("error-asignacion").hidden = true;
@@ -401,7 +439,8 @@ function actualizarContadorTallas() {
       suma += val;
     }
   });
-  label.textContent = "Tallas: " + numTallas + " | Cantidad: " + suma;
+  var totalCtv = suma * precioActualCtv;
+  label.textContent = "Tallas: " + numTallas + " | Cantidad: " + suma + " | Total: " + formatBsCtv(totalCtv);
 }
 
 /**
@@ -498,11 +537,11 @@ export function renderTabAsignar(corte, container, opciones) {
       })
       .join("");
 
-  // Opciones iniciales del select de tarea (se repobla al elegir trabajador)
+  // Opciones iniciales del select de tarea (solo tareas disponibles globalmente)
   let opcionesTareas =
     '<option value="">Seleccionar tarea...</option>' +
     '<option value="__nueva__">＋ Crear nueva tarea</option>' +
-    (corte.tareas || [])
+    getTareasDisponibles(corte)
       .map(function (tarea) {
         return (
           '<option value="' +
@@ -565,7 +604,7 @@ export function renderTabAsignar(corte, container, opciones) {
     // Boton submit
     (esTerminado
       ? ""
-      : '<button type="button" class="btn btn--success at-asignar__submit" id="btn-submit-asignacion">Asignar Tareas</button>') +
+      : '<button type="button" class="btn btn--success at-asignar__submit" id="btn-submit-asignacion" disabled>Asignar Tareas</button>') +
     '<p id="error-asignacion" class="form-error" hidden></p>' +
     "</div>" +
     // Historial de asignaciones
@@ -578,82 +617,26 @@ export function renderTabAsignar(corte, container, opciones) {
   // ---- EVENT LISTENERS (solo si el corte no esta finalizado) ----
 
   if (!esTerminado) {
-    // Select trabajador: al cambiar, repoblar tareas disponibles y ocultar campos
+    // Select trabajador: al cambiar, actualizar campos
     document
       .getElementById("select-asignar-trabajador")
       .addEventListener("change", function () {
-        let trabajadorId = this.value ? parseInt(this.value, 10) : null;
-        let selectTarea = document.getElementById("select-asignar-tarea");
-
-        if (!trabajadorId) {
-          selectTarea.innerHTML =
-            '<option value="">Seleccionar tarea...</option>';
-          ocultarCamposAsignacion();
-          return;
-        }
-
-        // Repoblar solo con tareas NO asignadas a este trabajador
-        // y que aun tengan al menos una talla con cantidad disponible
-        let tareasDisponibles = getTareasNoAsignadasATrabajador(
-          corte,
-          trabajadorId,
-        ).filter(function (t) {
-          return tieneAlgunaTallaDisponible(corte, t);
-        });
-        selectTarea.innerHTML =
-          '<option value="">Seleccionar tarea...</option>' +
-          '<option value="__nueva__">＋ Crear nueva tarea</option>' +
-          tareasDisponibles
-            .map(function (t) {
-              return (
-                '<option value="' +
-                t.id +
-                '">' +
-                escaparHTML(t.nombre || "Sin nombre") +
-                "</option>"
-              );
-            })
-            .join("");
-
-        ocultarCamposAsignacion();
+        actualizarCamposAsignacion(corte);
       });
 
-    // Select tarea: al cambiar, mostrar campos segun modo (crear o existente)
+    // Select tarea: al cambiar, actualizar campos segun ambos selects
     document
       .getElementById("select-asignar-tarea")
       .addEventListener("change", function () {
-        let value = this.value;
-        let trabajadorId = document.getElementById("select-asignar-trabajador")
-          .value
-          ? parseInt(
-              document.getElementById("select-asignar-trabajador").value,
-              10,
-            )
-          : null;
+        actualizarCamposAsignacion(corte);
+      });
 
-        if (!value) {
-          ocultarCamposAsignacion();
-          return;
-        }
-
-        if (!trabajadorId) {
-          // Seguridad: sin trabajador no deberia estar aqui
-          this.value = "";
-          ocultarCamposAsignacion();
-          return;
-        }
-
-        if (value === "__nueva__") {
-          modoCrearInine(corte, trabajadorId);
-        } else {
-          let tareaId = parseInt(value, 10);
-          let tarea = (corte.tareas || []).find(function (t) {
-            return t.id === tareaId;
-          });
-          if (tarea) {
-            modoExistente(corte, tarea, trabajadorId);
-          }
-        }
+    // Input precio: sincronizar precioActualCtv y actualizar contador
+    document
+      .getElementById("input-asignar-precio")
+      .addEventListener("input", function () {
+        precioActualCtv = parseInt(this.value, 10) || 0;
+        actualizarContadorTallas();
       });
 
     // Boton + : atajo para seleccionar "__nueva__" en el dropdown (modo crear inline)
@@ -671,7 +654,7 @@ export function renderTabAsignar(corte, container, opciones) {
         }
 
         selectTarea.value = "__nueva__";
-        selectTarea.dispatchEvent(new Event("change", { bubbles: true }));
+        actualizarCamposAsignacion(corte);
       });
 
     // Boton submit: procesar asignacion
