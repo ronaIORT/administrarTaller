@@ -288,12 +288,21 @@ export function renderTabEditar(corte, container, opciones) {
         return;
       }
 
-      // Click en fila de tarea (seleccion)
+      // Click en fila de tarea (toggle detalle + seleccion)
       var row = e.target.closest(".tarea-tabla-row");
       if (row && !e.target.closest("button")) {
         var compIdx = parseInt(row.dataset.componente);
         var tareaIdx = parseInt(row.dataset.tarea);
-        seleccionarFila(corte, compIdx, tareaIdx);
+        if (row.classList.contains("expanded")) {
+          deseleccionarFila();
+        } else {
+          // Colapsar otras filas expandidas
+          var expandedRows = row.parentNode.querySelectorAll(".tarea-tabla-row.expanded");
+          for (var i = 0; i < expandedRows.length; i++) {
+            expandedRows[i].classList.remove("expanded");
+          }
+          seleccionarFila(corte, compIdx, tareaIdx);
+        }
         return;
       }
 
@@ -463,6 +472,39 @@ function renderComponentesCardsEditar(corte, filtro) {
         html += '</button>';
         html += '</div>';
         html += '</div>';
+
+        // Detalle colapsable de trabajadores asignados
+        html += '<div class="tarea-tabla-detail">';
+        var asigs = t.asignaciones || [];
+        if (asigs.length > 0) {
+          // Agrupar por trabajador
+          var grouped = {};
+          asigs.forEach(function (a) {
+            var tid = a.trabajadorId;
+            if (!grouped[tid]) {
+              grouped[tid] = { tallas: [], totalCtv: 0 };
+            }
+            grouped[tid].tallas.push(a.talla || "Única");
+            grouped[tid].totalCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
+          });
+          html += '<ul class="tarea-detail-list">';
+          Object.keys(grouped).forEach(function (tidStr) {
+            var g = grouped[tidStr];
+            var tid = parseInt(tidStr);
+            var nombreTrab = (trabajadoresMapRef && trabajadoresMapRef[tid]) || ("#" + tid);
+            var tallasStr = g.tallas.join(", ");
+            var totalBs = (g.totalCtv / 100).toFixed(2);
+            html += '<li class="tarea-detail-item">';
+            html += '<span class="tarea-detail-worker">' + escaparHTML(nombreTrab) + ':</span>';
+            html += '<span class="tarea-detail-tallas">' + escaparHTML(tallasStr) + '.</span>';
+            html += '<span class="tarea-detail-total">Total: ' + totalBs + ' Bs</span>';
+            html += "</li>";
+          });
+          html += "</ul>";
+        } else {
+          html += '<p class="form-hint" style="margin:0;">Sin trabajadores asignados</p>';
+        }
+        html += "</div>";
       });
 
       html += '</div>';
@@ -520,6 +562,7 @@ function refrescarCards(corte) {
       var nuevaRow = container.querySelector('.tarea-tabla-row[data-componente="' + compIdxSel + '"][data-tarea="' + tareaIdxSel + '"]');
       if (nuevaRow) {
         nuevaRow.classList.add("selected");
+        nuevaRow.classList.add("expanded");
         filaSeleccionadaIdx = { componenteIdx: compIdxSel, tareaIdx: tareaIdxSel };
         mostrarFABs(corte, compIdxSel, tareaIdxSel);
       } else {
@@ -661,7 +704,10 @@ function seleccionarFila(corte, compIdx, tareaIdx) {
   filaSeleccionadaIdx = { componenteIdx: compIdx, tareaIdx: tareaIdx };
 
   var row = document.querySelector('.tarea-tabla-row[data-componente="' + compIdx + '"][data-tarea="' + tareaIdx + '"]');
-  if (row) row.classList.add("selected");
+  if (row) {
+    row.classList.add("selected");
+    row.classList.add("expanded");
+  }
 
   mostrarFABs(corte, compIdx, tareaIdx);
 }
@@ -669,6 +715,11 @@ function seleccionarFila(corte, compIdx, tareaIdx) {
 function deseleccionarFila() {
   var row = document.querySelector(".tarea-tabla-row.selected");
   if (row) row.classList.remove("selected");
+  // Colapsar detalle de todas las filas
+  var expandedRows = document.querySelectorAll(".tarea-tabla-row.expanded");
+  for (var i = 0; i < expandedRows.length; i++) {
+    expandedRows[i].classList.remove("expanded");
+  }
   filaSeleccionadaIdx = null;
   ocultarFABs();
 }

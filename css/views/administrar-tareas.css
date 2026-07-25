@@ -581,6 +581,61 @@
   justify-content: flex-end;
 }
 
+/* Fila de detalle colapsable (trabajadores asignados) */
+.tarea-tabla-detail {
+  display: none;
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  background: var(--color-surface-variant);
+  border-bottom: 1px solid var(--color-divider);
+  font-size: var(--font-size-xs);
+  animation: fadeIn var(--transition-base) ease both;
+}
+
+.tarea-tabla-row.expanded {
+  border-bottom: none;
+}
+
+.tarea-tabla-row.expanded + .tarea-tabla-detail {
+  display: block;
+}
+
+.tarea-detail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tarea-detail-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  padding: 2px 0;
+  flex-wrap: wrap;
+}
+
+.tarea-detail-worker {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  flex-shrink: 0;
+}
+
+.tarea-detail-tallas {
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold);
+  flex: 1;
+}
+
+.tarea-detail-total {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
 /* =============================================================
  * TAB 5: ASIGNAR - Formulario de asignacion + historial
  * ============================================================= */
