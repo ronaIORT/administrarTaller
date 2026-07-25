@@ -178,16 +178,18 @@ function filtrarCortes() {
 
 function calcularProgreso(corte) {
   if (corte.estado === "terminado") return 100;
-  if (!corte.tareas || corte.tareas.length === 0) return 0;
+  if (!corte.componentes || corte.componentes.length === 0) return 0;
   var total = 0;
   var completado = 0;
-  corte.tareas.forEach(function (t) {
-    total += t.unidadesTotales || 0;
-    if (t.asignaciones) {
-      t.asignaciones.forEach(function (a) {
-        completado += a.cantidad || 0;
-      });
-    }
+  (corte.componentes || []).forEach(function (comp) {
+    (comp.tareas || []).forEach(function (t) {
+      total += t.unidadesTotales || 0;
+      if (t.asignaciones) {
+        t.asignaciones.forEach(function (a) {
+          completado += a.cantidad || 0;
+        });
+      }
+    });
   });
   if (total === 0) return 0;
   return Math.round((completado / total) * 100);
@@ -260,7 +262,7 @@ function renderListaCortes(cortes) {
         '</div>' +
         '<div class="corte-card__footer">' +
         '<button class="btn btn--outline btn--sm btn-administrar-corte" data-id="' + c.id + '">Administrar</button>' +
-        '<button class="btn btn--ghost btn--sm btn-compartir-corte" data-id="' + c.id + '">' +
+        '<button class="btn btn--ghost btn--sm btn-compartir-corte" data-id="' + c.id + '" data-nombre="' + escaparHTML(c.nombreCorte || '') + '">' +
         '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:4px"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>' +
         'Compartir</button>' +
         '<button class="btn btn--ghost btn--sm btn-eliminar-corte" data-id="' + c.id + '" data-nombre="' + escaparHTML(c.nombreCorte || "") + '">Eliminar</button>' +
@@ -300,7 +302,8 @@ function manejarClickDocumentoC(e) {
   }
   if (fueCompartir) {
     var idCompartir = parseInt(fueCompartir.dataset.id);
-    exportarCorteJSON(idCompartir);
+    var nombreCompartir = fueCompartir.dataset.nombre || "este corte";
+    confirmarExportarCorte(idCompartir, nombreCompartir);
     return;
   }
   if (fueEliminar) {
@@ -365,6 +368,60 @@ async function confirmarEliminarCorte(id, nombre) {
 }
 
 // ============================================================
+// CONFIRMAR EXPORTAR CORTE - Modal de confirmacion
+// ============================================================
+
+function confirmarExportarCorte(corteId, nombreCorte) {
+  var overlay = document.createElement("div");
+  overlay.className = "modal-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-labelledby", "modal-exportar-corte-titulo");
+
+  overlay.innerHTML =
+    '<div class="modal modal--sm">' +
+    '<div class="modal__header">' +
+    '<h3 id="modal-exportar-corte-titulo" class="modal__title">Exportar Corte</h3>' +
+    '</div>' +
+    '<div class="modal__body">' +
+    '<p>Se exportara el corte <strong>"' + escaparHTML(nombreCorte) + '"</strong> como archivo .tcorte.json con su prenda, trabajadores y pagos asociados.</p>' +
+    '</div>' +
+    '<div class="modal__footer">' +
+    '<button class="btn btn--secondary modal-cancelar">Cancelar</button>' +
+    '<button class="btn btn--primary modal-confirmar">Exportar</button>' +
+    '</div>' +
+    '</div>';
+
+  document.body.appendChild(overlay);
+  document.body.style.overflow = "hidden";
+
+  var cerrar = function () {
+    overlay.classList.add("closing");
+    setTimeout(function () {
+      overlay.remove();
+      document.body.style.overflow = "auto";
+    }, 250);
+  };
+
+  overlay.querySelector(".modal-cancelar").addEventListener("click", cerrar);
+  overlay.querySelector(".modal-confirmar").addEventListener("click", function () {
+    cerrar();
+    exportarCorteJSON(corteId);
+  });
+  overlay.addEventListener("click", function (e) {
+    if (e.target === overlay) cerrar();
+  });
+
+  var escHandler = function (e) {
+    if (e.key === "Escape") {
+      cerrar();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  document.addEventListener("keydown", escHandler);
+}
+
+// ============================================================
 // EXPORTAR CORTE COMO JSON - Construye un paquete con el corte,
 // su prenda, sus trabajadores y sus pagos. Luego lo comparte
 // via Web Share API o lo descarga como .tcorte.json.
@@ -385,11 +442,21 @@ async function exportarCorteJSON(corteId) {
 
     // Recolectar trabajadorIds unicos de las asignaciones
     var idsTrab = {};
-    (corte.tareas || []).forEach(function (t) {
-      (t.asignaciones || []).forEach(function (a) {
-        if (a.trabajadorId) idsTrab[a.trabajadorId] = true;
+    (corte.componentes || []).forEach(function (comp) {
+      (comp.tareas || []).forEach(function (t) {
+        (t.asignaciones || []).forEach(function (a) {
+          if (a.trabajadorId) idsTrab[a.trabajadorId] = true;
+        });
       });
     });
+    // Compatibilidad con formato antiguo (corte.tareas directo)
+    if (corte.tareas && Array.isArray(corte.tareas)) {
+      corte.tareas.forEach(function (t) {
+        (t.asignaciones || []).forEach(function (a) {
+          if (a.trabajadorId) idsTrab[a.trabajadorId] = true;
+        });
+      });
+    }
     var trabajadoresArr = [];
     var idList = Object.keys(idsTrab).map(Number);
     if (idList.length > 0) {
@@ -553,7 +620,7 @@ function validarPaqueteCorte(data) {
   if (!data.version || data.version.indexOf("tallercorte/") !== 0) return "Version de archivo no soportada.";
   if (data.tipo !== "corte") return "El archivo no es un paquete de corte valido.";
   if (!data.datos || !data.datos.corte) return "El archivo no contiene datos del corte.";
-  if (!Array.isArray(data.datos.corte.tareas)) return "El corte no tiene tareas validas.";
+  if (!Array.isArray(data.datos.corte.componentes) && !Array.isArray(data.datos.corte.tareas)) return "El corte no tiene tareas validas.";
   return null;
 }
 
@@ -577,9 +644,10 @@ async function procesarImportacionCorte(data) {
       if (prendaExistente) {
         nuevaPrendaId = prendaExistente.id;
       } else {
+        var prendaComponentes = prenda.componentes || (prenda.tareas ? [{ nombre: "General", tareas: prenda.tareas || [] }] : []);
         nuevaPrendaId = await db.prendas.add({
           nombre: prenda.nombre,
-          tareas: prenda.tareas || []
+          componentes: prendaComponentes
         });
       }
     }
@@ -601,17 +669,41 @@ async function procesarImportacionCorte(data) {
     var corteData = JSON.parse(JSON.stringify(corte));
     delete corteData.id;
     corteData.prendaId = nuevaPrendaId;
-    if (corteData.tareas) {
-      corteData.tareas = corteData.tareas.map(function (tarea) {
-        if (tarea.asignaciones) {
-          tarea.asignaciones = tarea.asignaciones.map(function (a) {
-            if (a.trabajadorId && mapaTrab[a.trabajadorId] !== undefined) {
-              a.trabajadorId = mapaTrab[a.trabajadorId];
+
+    // Convertir formato antiguo (tareas directas) a nuevo (componentes)
+    if (corteData.tareas && !corteData.componentes) {
+      var compsMap = {};
+      var ordenEtq = [];
+      corteData.tareas.forEach(function (t) {
+        var etq = t.etiqueta || "General";
+        if (!compsMap[etq]) { compsMap[etq] = []; ordenEtq.push(etq); }
+        compsMap[etq].push(t);
+      });
+      corteData.componentes = [];
+      ordenEtq.forEach(function (nombre) {
+        corteData.componentes.push({ nombre: nombre, tareas: compsMap[nombre] });
+      });
+      delete corteData.tareas;
+      delete corteData.etiquetas;
+    }
+
+    // Remapear trabajadorIds en asignaciones
+    if (corteData.componentes) {
+      corteData.componentes = corteData.componentes.map(function (comp) {
+        if (comp.tareas) {
+          comp.tareas = comp.tareas.map(function (tarea) {
+            if (tarea.asignaciones) {
+              tarea.asignaciones = tarea.asignaciones.map(function (a) {
+                if (a.trabajadorId && mapaTrab[a.trabajadorId] !== undefined) {
+                  a.trabajadorId = mapaTrab[a.trabajadorId];
+                }
+                return a;
+              });
             }
-            return a;
+            return tarea;
           });
         }
-        return tarea;
+        return comp;
       });
     }
 

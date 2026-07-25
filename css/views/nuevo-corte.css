@@ -38,6 +38,33 @@
   color: var(--color-text);
 }
 
+/* ----- ENCABEZADO DE SECCION COMPONENTES ----- */
+
+.componentes-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.componentes-section-header .section-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.componentes-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.componentes-input-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
 /* ----- FILA DE INPUTS PARA AGREGAR TALLA ----- */
 
 .tallas-input-row {
@@ -191,6 +218,145 @@
   height: 1px;
   background-color: var(--color-divider);
   margin: var(--space-1) 0;
+}
+
+/* =============================================================
+ * CARD DE COMPONENTE COLAPSABLE
+ * ============================================================= */
+
+.componente-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+  transition: box-shadow var(--transition-fast);
+}
+
+.componente-card:hover {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* ----- HEADER DEL CARD ----- */
+
+.componente-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-3);
+  cursor: pointer;
+  user-select: none;
+  background: linear-gradient(135deg, var(--color-surface-variant) 0%, var(--color-surface) 100%);
+  border-bottom: 1px solid var(--color-divider);
+  transition: background var(--transition-fast);
+}
+
+.componente-card__header:hover {
+  background: var(--color-hover-bg, rgba(255, 255, 255, 0.04));
+}
+
+/* ----- CHEVRON CON ROTACION ----- */
+
+.componente-card__chevron {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-base);
+}
+
+.componente-card--collapsed .componente-card__chevron {
+  transform: rotate(-90deg);
+}
+
+/* ----- TITULO, CONTADOR Y SUBTOTAL ----- */
+
+.componente-card__title {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+  font-size: var(--font-size-base);
+  flex: 1;
+}
+
+.componente-card__count {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.componente-card__subtotal {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ----- CUERPO COLAPSABLE ----- */
+
+.componente-card__body {
+  transition: max-height var(--transition-slow, 0.35s) ease, opacity var(--transition-base) ease, padding var(--transition-base) ease;
+  max-height: 2000px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.componente-card--collapsed .componente-card__body {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* ----- FILA INLINE PARA AGREGAR TAREA DENTRO DEL CARD ----- */
+
+.componente-card__add-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-top: 1px solid transparent;
+}
+
+.componente-card .tareas-tabla {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.componente-card .tareas-tabla-header {
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.componente-card .tarea-tabla-row {
+  padding: var(--space-2) var(--space-3);
+}
+
+.componente-card .tarea-tabla-row:last-child {
+  border-bottom: 1px solid var(--color-divider);
+}
+
+.componente-card__add-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.componente-card__add-row .input-precio-ctv-wrapper {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.componente-card__add-row .btn--sm {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* ----- RESPONSIVE: TABLET (768px+) ----- */

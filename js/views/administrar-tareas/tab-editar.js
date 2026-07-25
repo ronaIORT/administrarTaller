@@ -5,10 +5,12 @@
 // seleccionar fila, y boton "Actualizar Prenda" que sincroniza
 // las tareas no asignadas de vuelta al template de la prenda.
 // Solo se pueden eliminar tareas sin asignaciones.
+// Trabaja con corte.componentes en lugar de corte.tareas.
+// Presenta componentes en cards colapsables.
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML, formatCtv, formatCostoTotal } from "../../utils.js";
+import { escaparHTML, formatCtv, formatCostoTotal, COMPONENTE_DEFAULT } from "../../utils.js";
 import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML } from "../shared.js";
 import { getTallasDisponiblesParaTarea, abrirModalAsignarTarea, confirmarEliminarAsignaciones } from "./asignacion-compartida.js";
 
@@ -19,14 +21,23 @@ import { getTallasDisponiblesParaTarea, abrirModalAsignarTarea, confirmarElimina
 /** ID del contenedor de FABs para este tab */
 const EDIT_FAB_CONTAINER_ID = "at-editar-fab-container";
 
-/** Indice de la fila de tarea seleccionada */
+/** Indice de la fila de tarea seleccionada: {componenteIdx, tareaIdx} */
 let filaSeleccionadaIdx = null;
 
 /** Timeout para ocultar FABs con animacion */
 let ocultarFABsTimeout = null;
 
-/** Filtro activo: "todas" | "asignadas" | "no-asignadas" */
+/** Filtro activo: "todas" | "asignadas" | "parcialmente" | "no-asignadas" */
 let filtroActual = "todas";
+
+/** Lista de nombres de componentes del corte */
+let componentesData = [];
+
+/** Filtro de componente activo ("__todas" o nombre de componente) */
+let componenteFiltroActivo = "__todas";
+
+/** ID del ultimo corte renderizado para saber si cambio */
+let ultimoCorteIdEditar = null;
 
 /** Referencia a onDataChange para FABs y modales que no lo reciben directamente */
 let onDataChangeRef = null;
@@ -35,8 +46,106 @@ let onDataChangeRef = null;
 let trabajadoresMapRef = null;
 
 // ============================================================
-// HELPERS DE DISPONIBILIDAD
+// HELPERS DE DATOS
 // ============================================================
+
+/** Obtiene array plano de todas las tareas con su metadata de componente */
+function getTodasLasTareasConMeta(corte) {
+  var result = [];
+  (corte.componentes || []).forEach(function (comp, compIdx) {
+    (comp.tareas || []).forEach(function (t, tareaIdx) {
+      result.push({ tarea: t, componenteIdx: compIdx, tareaIdx: tareaIdx, componenteNombre: comp.nombre });
+    });
+  });
+  return result;
+}
+
+/** Obtiene una tarea especifica por indices de componente/tarea */
+function getTarea(corte, compIdx, tareaIdx) {
+  var comp = (corte.componentes || [])[compIdx];
+  return comp ? (comp.tareas || [])[tareaIdx] : null;
+}
+
+/** Calcula el costo total de todas las tareas de todos los componentes */
+function calcularCostoTotal(corte) {
+  var total = 0;
+  (corte.componentes || []).forEach(function (comp) {
+    (comp.tareas || []).forEach(function (t) {
+      total += t.precioUnitario || 0;
+    });
+  });
+  return total;
+}
+
+/** Obtiene el siguiente ID de tarea global */
+function getNuevoId(corte) {
+  var maxId = 0;
+  (corte.componentes || []).forEach(function (comp) {
+    (comp.tareas || []).forEach(function (t) {
+      if (t.id > maxId) maxId = t.id;
+    });
+  });
+  return maxId + 1;
+}
+
+/** Crea un clon profundo de los componentes para mutaciones */
+function clonarComponentes(corte) {
+  return (corte.componentes || []).map(function (comp) {
+    return {
+      nombre: comp.nombre,
+      tareas: (comp.tareas || []).map(function (t) {
+        return {
+          id: t.id,
+          nombre: t.nombre,
+          precioUnitario: t.precioUnitario,
+          unidadesTotales: t.unidadesTotales,
+          asignaciones: (t.asignaciones || []).map(function (a) {
+            return { trabajadorId: a.trabajadorId, cantidad: a.cantidad, talla: a.talla, fecha: a.fecha };
+          })
+        };
+      })
+    };
+  });
+}
+
+// ============================================================
+// HELPERS DE FILTRO POR COMPONENTE
+// ============================================================
+
+/** Renderiza los chips de filtro de componente */
+function mostrarFiltroComponentesEditar() {
+  var container = document.getElementById("editar-componente-filter-chips");
+  if (!container) return;
+  var comps = componentesData.length > 0 ? componentesData : [COMPONENTE_DEFAULT];
+  var html = '<button class="filter-chip' + (componenteFiltroActivo === "__todas" ? " active" : "") + '" data-componente="__todas">Todas</button>';
+  comps.forEach(function (c) {
+    html += '<button class="filter-chip' + (componenteFiltroActivo === c ? " active" : "") + '" data-componente="' + escaparHTML(c) + '">' + escaparHTML(c) + '</button>';
+  });
+  container.innerHTML = html;
+}
+
+/** Filtra las tareas con meta por componente activo */
+function aplicarFiltroComponenteEditar(tareasConMeta) {
+  if (componenteFiltroActivo === "__todas") return tareasConMeta;
+  return tareasConMeta.filter(function (item) {
+    return item.componenteNombre === componenteFiltroActivo;
+  });
+}
+
+/** Actualiza el costo por componente en el header */
+function actualizarCostoComponenteEditar(tareasConMeta) {
+  var label = document.getElementById("editar-costo-componente");
+  if (!label) return;
+  if (componenteFiltroActivo === "__todas" || !tareasConMeta || tareasConMeta.length === 0) {
+    label.style.display = "none";
+    return;
+  }
+  var costo = tareasConMeta.reduce(function (s, item) {
+    return s + ((item.tarea.precioUnitario || 0));
+  }, 0);
+  label.style.display = "inline";
+  label.textContent = 'Costo (' + componenteFiltroActivo + '): ' + formatCostoTotal(costo);
+}
 
 // ============================================================
 // RENDER PRINCIPAL
@@ -51,15 +160,26 @@ export function renderTabEditar(corte, container, opciones) {
   document.getElementById(EDIT_FAB_CONTAINER_ID)?.remove();
   filaSeleccionadaIdx = null;
   filtroActual = "todas";
+  componentesData = (corte.componentes || []).map(function (c) { return c.nombre; });
+  if (corte.id !== ultimoCorteIdEditar) {
+    componenteFiltroActivo = "__todas";
+    ultimoCorteIdEditar = corte.id;
+  }
 
-  // Calcular costo por prenda total
-  const costoUnitarioCtv = (corte.tareas || []).reduce(function (s, t) { return s + (t.precioUnitario || 0); }, 0);
-  const tienePrenda = !!(prenda && corte.prendaId);
+  var costoUnitarioCtv = calcularCostoTotal(corte);
+  var tienePrenda = !!(prenda && corte.prendaId);
+
+  var comps = componentesData.length > 0 ? componentesData : [COMPONENTE_DEFAULT];
+  var componenteChipsHTML = '<button class="filter-chip' + (componenteFiltroActivo === "__todas" ? " active" : "") + '" data-componente="__todas">Todas</button>';
+  comps.forEach(function (c) {
+    var activo = componenteFiltroActivo === c ? " active" : "";
+    componenteChipsHTML += '<button class="filter-chip' + activo + '" data-componente="' + escaparHTML(c) + '">' + escaparHTML(c) + '</button>';
+  });
 
   container.innerHTML =
     '<section class="at-editar">' +
 
-    // Filtros + costo por prenda
+    // Filtros por estado
     '<div class="at-editar__filtros">' +
     '<div class="filter-chips" id="filter-chips-editar">' +
     '<button class="filter-chip active" data-filtro="todas">Todas</button>' +
@@ -67,24 +187,30 @@ export function renderTabEditar(corte, container, opciones) {
     '<button class="filter-chip" data-filtro="parcialmente">Parcial</button>' +
     '<button class="filter-chip" data-filtro="no-asignadas">Sin asignar</button>' +
     '</div>' +
-    '<span class="at-editar__costo-prenda">Costo por prenda: <strong>' + formatCostoTotal(costoUnitarioCtv) + '</strong></span>' +
     '</div>' +
 
-    // Tabla de tareas
-    '<div id="at-editar-tabla-container">' +
-    renderTablaTareas(corte.tareas, filtroActual) +
+    // Input para agregar componente nuevo + chips de filtro de componente
+    '<div class="form-group">' +
+    '<div class="componentes-section-header">' +
+    '<span class="section-title">Componentes</span>' +
+    '<span class="componentes-hint">Agrega componentes o edita las tareas existentes.</span>' +
+    '</div>' +
+    '<div class="componentes-input-row">' +
+    '<input type="text" id="input-editar-componente" class="form-input" placeholder="Ej: Delanteros" maxlength="30" autocomplete="off" />' +
+    '<button type="button" class="btn btn--outline btn--sm" id="btn-editar-agregar-componente">Agregar</button>' +
+    '</div>' +
+    '<p id="error-editar-componente" class="form-error" hidden></p>' +
+    '<div class="filter-chips" id="editar-componente-filter-chips">' + componenteChipsHTML + '</div>' +
+    '<span id="editar-costo-componente" class="at-editar__costo-componente" style="display:none"></span>' +
     '</div>' +
 
-    // Formulario para agregar nueva tarea al final
-    '<div class="at-editar__nueva-tarea">' +
-    '<input type="text" id="input-editar-nombre-tarea" class="form-input" placeholder="Nombre de la tarea" maxlength="60" autocomplete="off" />' +
-    '<input type="number" id="input-editar-precio-tarea" class="form-input" placeholder="ctv" min="0" max="9999" step="1" autocomplete="off" />' +
-    '<button class="btn btn--outline btn--sm" id="btn-editar-agregar-tarea" aria-label="Agregar tarea">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-    '</button>' +
+    // Cards de componentes con tareas
+    '<div id="editar-cards-container">' +
+    renderComponentesCardsEditar(corte, filtroActual) +
     '</div>' +
-    '<p id="error-editar-nombre-tarea" class="form-error" hidden></p>' +
-    '<p id="error-editar-precio-tarea" class="form-error" hidden></p>' +
+
+    // Costo por prenda al final
+    '<div class="at-editar__costo-prenda">Costo por prenda: <strong id="at-editar-costo-total">' + formatCostoTotal(costoUnitarioCtv) + '</strong></div>' +
 
     // Boton Actualizar Prenda (solo si el corte tiene prenda asociada)
     (tienePrenda
@@ -95,36 +221,127 @@ export function renderTabEditar(corte, container, opciones) {
 
     '</section>';
 
-  // Event listeners para filtros
-  const filterChips = document.getElementById("filter-chips-editar");
+  // ============================================================
+  // EVENT LISTENERS
+  // ============================================================
+
+  // Filtros por estado de asignacion
+  var filterChips = document.getElementById("filter-chips-editar");
   filterChips.addEventListener("click", function (e) {
-    const chip = e.target.closest(".filter-chip");
+    var chip = e.target.closest(".filter-chip");
     if (!chip) return;
     filtroActual = chip.dataset.filtro;
     filterChips.querySelectorAll(".filter-chip").forEach(function (c) { c.classList.remove("active"); });
     chip.classList.add("active");
     deseleccionarFila();
-    refrescarTabla(corte);
+    refrescarCards(corte);
   });
 
-  // Event listener para agregar tarea
-  document.getElementById("btn-editar-agregar-tarea").addEventListener("click", function () {
-    agregarTareaInline(corte, onDataChange);
+  // Filtros por componente
+  var componenteFilterChips = document.getElementById("editar-componente-filter-chips");
+  componenteFilterChips.addEventListener("click", function (e) {
+    var chip = e.target.closest(".filter-chip");
+    if (!chip) return;
+    componenteFiltroActivo = chip.dataset.componente;
+    componenteFilterChips.querySelectorAll(".filter-chip").forEach(function (c) { c.classList.remove("active"); });
+    chip.classList.add("active");
+    deseleccionarFila();
+    refrescarCards(corte);
   });
 
-  // Enter en inputs: navega al siguiente y luego agrega
-  document.getElementById("input-editar-nombre-tarea").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      document.getElementById("input-editar-precio-tarea").focus();
-    }
-  });
-  document.getElementById("input-editar-precio-tarea").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      agregarTareaInline(corte, onDataChange);
-    }
-  });
+  // Input de componente: agregar componente nuevo
+  var btnAgregarComponente = document.getElementById("btn-editar-agregar-componente");
+  if (btnAgregarComponente) {
+    btnAgregarComponente.addEventListener("click", function () {
+      agregarComponenteEditar(corte);
+    });
+
+    document.getElementById("input-editar-componente").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("btn-editar-agregar-componente").click();
+      }
+    });
+  }
+
+  // Delegacion de clicks en las cards de componentes
+  var cardsContainer = document.getElementById("editar-cards-container");
+  if (cardsContainer) {
+    cardsContainer.addEventListener("click", function (e) {
+      // Toggle colapsar card
+      var header = e.target.closest(".componente-card__header");
+      if (header && !e.target.closest("button")) {
+        var card = header.closest(".componente-card");
+        if (card) card.classList.toggle("componente-card--collapsed");
+        return;
+      }
+
+      // Boton agregar tarea inline en card
+      var addBtn = e.target.closest(".componente-add-btn");
+      if (addBtn) {
+        var card = addBtn.closest(".componente-card");
+        if (!card) return;
+        var compIdx = parseInt(card.dataset.componenteIdx);
+        var inputNombre = card.querySelector(".componente-add-nombre");
+        var inputPrecio = card.querySelector(".componente-add-precio");
+        agregarTareaCardInline(corte, compIdx, inputNombre, inputPrecio);
+        return;
+      }
+
+      // Click en fila de tarea (seleccion)
+      var row = e.target.closest(".tarea-tabla-row");
+      if (row && !e.target.closest("button")) {
+        var compIdx = parseInt(row.dataset.componente);
+        var tareaIdx = parseInt(row.dataset.tarea);
+        seleccionarFila(corte, compIdx, tareaIdx);
+        return;
+      }
+
+      // Botones de accion en fila de tarea
+      if (e.target.closest(".btn-editar-tarea-row")) {
+        var r = e.target.closest(".tarea-tabla-row");
+        abrirModalEditarTarea(corte, parseInt(r.dataset.componente), parseInt(r.dataset.tarea), onDataChange);
+        return;
+      }
+      if (e.target.closest(".btn-agregar-debajo-tarea-row")) {
+        var r2 = e.target.closest(".tarea-tabla-row");
+        abrirModalAgregarTarea(corte, parseInt(r2.dataset.componente), parseInt(r2.dataset.tarea));
+        return;
+      }
+      if (e.target.closest(".btn-eliminar-tarea-row")) {
+        var r3 = e.target.closest(".tarea-tabla-row");
+        confirmarEliminarTarea(corte, parseInt(r3.dataset.componente), parseInt(r3.dataset.tarea), onDataChange);
+        return;
+      }
+
+      // Boton eliminar componente (solo visible en componentes vacios)
+      if (e.target.closest(".btn-eliminar-componente-card")) {
+        var btnComp = e.target.closest(".btn-eliminar-componente-card");
+        var compIdxDel = parseInt(btnComp.dataset.componente);
+        confirmarEliminarComponente(corte, compIdxDel);
+        return;
+      }
+    });
+
+    // Keydown delegation para inputs inline de agregar tarea
+    cardsContainer.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" && e.target.classList.contains("componente-add-nombre")) {
+        e.preventDefault();
+        var card = e.target.closest(".componente-card");
+        if (card) {
+          var precioInput = card.querySelector(".componente-add-precio");
+          if (precioInput) precioInput.focus();
+        }
+      } else if (e.key === "Enter" && e.target.classList.contains("componente-add-precio")) {
+        e.preventDefault();
+        var card = e.target.closest(".componente-card");
+        if (card) {
+          var addBtn = card.querySelector(".componente-add-btn");
+          if (addBtn) addBtn.click();
+        }
+      }
+    });
+  }
 
   // Boton Actualizar Prenda
   if (tienePrenda) {
@@ -132,31 +349,6 @@ export function renderTabEditar(corte, container, opciones) {
       confirmarActualizarPrenda(corte, prenda, onDataChange);
     });
   }
-
-  // Delegacion de clicks en la tabla
-  const tablaContainer = document.getElementById("at-editar-tabla-container");
-  tablaContainer.addEventListener("click", function (e) {
-    const row = e.target.closest(".tarea-tabla-row");
-    if (row && !e.target.closest("button")) {
-      seleccionarFila(corte, parseInt(row.dataset.idx));
-      return;
-    }
-    if (e.target.closest(".btn-editar-tarea-row")) {
-      const r = e.target.closest(".tarea-tabla-row");
-      abrirModalEditarTarea(corte, parseInt(r.dataset.idx), onDataChange);
-      return;
-    }
-    if (e.target.closest(".btn-agregar-debajo-tarea-row")) {
-      const r = e.target.closest(".tarea-tabla-row");
-      abrirModalAgregarTarea(corte, parseInt(r.dataset.idx));
-      return;
-    }
-    if (e.target.closest(".btn-eliminar-tarea-row")) {
-      const r = e.target.closest(".tarea-tabla-row");
-      confirmarEliminarTarea(corte, parseInt(r.dataset.idx), onDataChange);
-      return;
-    }
-  });
 
   // Cerrar FABs al hacer click fuera
   document.addEventListener("click", function handler(e) {
@@ -167,173 +359,293 @@ export function renderTabEditar(corte, container, opciones) {
 }
 
 // ============================================================
-// RENDER TABLA DE TAREAS con filtro aplicado
-// Reutiliza las clases .tareas-tabla y .tarea-tabla-row del CSS
-// de nuevo-corte.css para mantener consistencia visual.
+// RENDER CARDS DE COMPONENTES CON TAREAS
+// Agrupa las tareas por componente en cards colapsables.
+// Cada card contiene una tabla de tareas y una fila inline
+// para agregar nuevas tareas a ese componente.
 // ============================================================
 
-function renderTablaTareas(tareas, filtro) {
-  if (!tareas || tareas.length === 0) {
-    return estadoVacioHTML("Sin tareas", "Agrega tareas usando el formulario inferior");
+function renderComponentesCardsEditar(corte, filtro) {
+  var componentes = corte.componentes || [];
+
+  if (componentes.length === 0) {
+    return estadoVacioHTML("Sin componentes", "Agrega componentes usando el campo de arriba");
   }
 
-  // Aplicar filtro local
-  let tareasFiltradas = tareas;
-  if (filtro === "asignadas") {
-    tareasFiltradas = tareas.filter(function (t) {
-      const totalAsignado = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-      return totalAsignado > 0 && totalAsignado >= t.unidadesTotales;
+  var html = '';
+
+  for (var ci = 0; ci < componentes.length; ci++) {
+    var comp = componentes[ci];
+    var nombreComp = comp.nombre;
+
+    // Aplicar filtro por componente activo
+    if (componenteFiltroActivo !== "__todas" && nombreComp !== componenteFiltroActivo) {
+      continue;
+    }
+
+    var tareasComp = (comp.tareas || []).map(function (t, tareaIdx) {
+      return { tarea: t, tareaIdx: tareaIdx };
     });
-  } else if (filtro === "parcialmente") {
-    tareasFiltradas = tareas.filter(function (t) {
-      const totalAsignado = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-      return totalAsignado > 0 && totalAsignado < t.unidadesTotales;
-    });
-  } else if (filtro === "no-asignadas") {
-    tareasFiltradas = tareas.filter(function (t) {
-      const totalAsignado = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-      return totalAsignado === 0;
-    });
+
+    // Aplicar filtro por estado de asignacion
+    var tareasFiltradas = tareasComp;
+    if (filtro === "asignadas") {
+      tareasFiltradas = tareasComp.filter(function (item) {
+        var totalAsignado = (item.tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+        return totalAsignado > 0 && totalAsignado >= item.tarea.unidadesTotales;
+      });
+    } else if (filtro === "parcialmente") {
+      tareasFiltradas = tareasComp.filter(function (item) {
+        var totalAsignado = (item.tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+        return totalAsignado > 0 && totalAsignado < item.tarea.unidadesTotales;
+      });
+    } else if (filtro === "no-asignadas") {
+      tareasFiltradas = tareasComp.filter(function (item) {
+        var totalAsignado = (item.tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+        return totalAsignado === 0;
+      });
+    }
+
+    var numTareas = tareasFiltradas.length;
+    var subtotal = tareasFiltradas.reduce(function (s, item) { return s + (item.tarea.precioUnitario || 0); }, 0);
+
+    html += '<div class="componente-card" data-componente-idx="' + ci + '">';
+    html += '<div class="componente-card__header" role="button" tabindex="0" aria-expanded="true">';
+    html += '<svg class="componente-card__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    html += '<span class="componente-card__title">' + escaparHTML(nombreComp) + '</span>';
+    html += '<span class="componente-card__count">' + numTareas + ' tarea' + (numTareas !== 1 ? 's' : '') + '</span>';
+    html += '<span class="componente-card__subtotal">' + formatCostoTotal(subtotal) + '</span>';
+    if ((comp.tareas || []).length === 0) {
+      html += '<button type="button" class="btn btn--ghost btn--sm btn-eliminar-componente-card" data-componente="' + ci + '" aria-label="Eliminar componente">';
+      html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      html += '</button>';
+    }
+    html += '</div>';
+
+    html += '<div class="componente-card__body">';
+
+    if (numTareas > 0) {
+      html += '<div class="tareas-tabla">';
+      html += '<div class="tareas-tabla-header">';
+      html += '<span class="tareas-tabla-header__nombre">Tarea</span>';
+      html += '<span class="tareas-tabla-header__precio">Precio (ctv)</span>';
+      html += '<span class="tareas-tabla-header__acciones"></span>';
+      html += '</div>';
+
+      tareasFiltradas.forEach(function (item) {
+        var t = item.tarea;
+        var tareaIdx = item.tareaIdx;
+        var nombre = escaparHTML(t.nombre || "");
+        var precio = t.precioUnitario || 0;
+        var totalAsignado = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+        var unidadesTotales = t.unidadesTotales || 0;
+        var porcentaje = unidadesTotales > 0 ? Math.min(100, (totalAsignado / unidadesTotales) * 100) : 0;
+        var estadoBarra = totalAsignado >= unidadesTotales ? "completa" : totalAsignado > 0 ? "parcial" : "vacia";
+
+        html += '<div class="tarea-tabla-row" data-componente="' + ci + '" data-tarea="' + tareaIdx + '" tabindex="0">';
+        html += '<div class="tarea-tabla-nombre">';
+        html += '<span class="tarea-nombre">' + (nombre || "<em>Sin nombre</em>") + '</span>';
+        html += '<div class="tarea-barra-container">';
+        html += '<div class="tarea-barra tarea-barra--' + estadoBarra + '" style="width:' + porcentaje + '%;"></div>';
+        html += '</div>';
+        html += '<span class="tarea-barra-texto">' + totalAsignado + ' / ' + unidadesTotales + ' unidades</span>';
+        html += '</div>';
+        html += '<span class="tarea-tabla-precio">' + formatCtv(precio) + '</span>';
+        html += '<div class="tarea-tabla-acciones">';
+        html += '<button type="button" class="btn btn--ghost btn--sm btn-editar-tarea-row" data-componente="' + ci + '" data-tarea="' + tareaIdx + '" aria-label="Editar tarea">';
+        html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>';
+        html += '</button>';
+        html += '<button type="button" class="btn btn--ghost btn--sm btn-agregar-debajo-tarea-row" data-componente="' + ci + '" data-tarea="' + tareaIdx + '" aria-label="Agregar tarea debajo">';
+        html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+        html += '</button>';
+        html += '<button type="button" class="btn btn--ghost btn--sm btn-eliminar-tarea-row" data-componente="' + ci + '" data-tarea="' + tareaIdx + '" aria-label="Eliminar tarea">';
+        html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+        html += '</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+
+      html += '</div>';
+    } else {
+      html += '<p class="form-hint" style="padding:var(--space-3) var(--space-3);text-align:center;margin:0;border-bottom:1px solid var(--color-divider);">';
+      html += filtro !== "todas" ? "Sin tareas con este filtro" : "Sin tareas en este componente";
+      html += '</p>';
+    }
+
+    // Fila inline para agregar tarea a este componente
+    html += '<div class="componente-card__add-row">';
+    html += '<input type="text" class="form-input componente-add-nombre" placeholder="Nueva tarea..." maxlength="60" autocomplete="off" />';
+    html += '<div class="input-precio-ctv-wrapper">';
+    html += '<input type="number" class="form-input componente-add-precio" placeholder="0" min="0" max="9999" step="1" autocomplete="off" />';
+    html += '<span class="input-precio-ctv-sufijo">ctv</span>';
+    html += '</div>';
+    html += '<button type="button" class="btn btn--outline btn--sm componente-add-btn" aria-label="Agregar tarea">';
+    html += '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+    html += '</button>';
+    html += '</div>';
+
+    html += '</div>'; // body
+    html += '</div>'; // card
   }
 
-  if (tareasFiltradas.length === 0) {
-    const msjFiltro = filtro === "asignadas" ? "Sin tareas completas" : filtro === "parcialmente" ? "Sin tareas parciales" : filtro === "no-asignadas" ? "Sin tareas sin asignar" : "Sin tareas";
-    const subFiltro = "Prueba con otro filtro";
-    return estadoVacioHTML(msjFiltro, subFiltro);
+  if (!html) {
+    return estadoVacioHTML("Sin resultados", "No hay componentes que coincidan con el filtro");
   }
 
-  // Mapear los indices filtrados a los indices reales del array original
-  const mapaIndices = tareasFiltradas.map(function (tf) {
-    return tareas.indexOf(tf);
-  });
-
-  return '<div class="tareas-tabla">' +
-    '<div class="tareas-tabla-header">' +
-    '<span class="tareas-tabla-header__nombre">Tarea</span>' +
-    '<span class="tareas-tabla-header__precio">Precio (ctv)</span>' +
-    '<span class="tareas-tabla-header__acciones"></span>' +
-    '</div>' +
-    tareasFiltradas.map(function (t, i) {
-      const idxReal = mapaIndices[i];
-      const nombre = escaparHTML(t.nombre || "");
-      const precio = t.precioUnitario || 0;
-      const totalAsignado = (t.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-      const unidadesTotales = t.unidadesTotales || 0;
-      const porcentaje = unidadesTotales > 0 ? Math.min(100, (totalAsignado / unidadesTotales) * 100) : 0;
-      const estadoBarra = totalAsignado >= unidadesTotales ? "completa" : totalAsignado > 0 ? "parcial" : "vacia";
-      const tieneAsignaciones = totalAsignado > 0;
-
-      return '<div class="tarea-tabla-row" data-idx="' + idxReal + '" tabindex="0">' +
-        '<div class="tarea-tabla-nombre">' +
-        '<span class="tarea-nombre">' + (nombre || "<em>Sin nombre</em>") + '</span>' +
-        '<div class="tarea-barra-container">' +
-        '<div class="tarea-barra tarea-barra--' + estadoBarra + '" style="width:' + porcentaje + '%;"></div>' +
-        '</div>' +
-        '<span class="tarea-barra-texto">' + totalAsignado + ' / ' + unidadesTotales + ' unidades</span>' +
-        '</div>' +
-        '<span class="tarea-tabla-precio">' + formatCtv(precio) + '</span>' +
-        '</div>';
-    }).join("") +
-    '</div>';
+  return html;
 }
 
 // ============================================================
-// REFRESCAR TABLA tras una mutacion
+// REFRESCAR CARDS tras una mutacion
 // ============================================================
 
-function refrescarTabla(corte) {
-  const container = document.getElementById("at-editar-tabla-container");
+function refrescarCards(corte) {
+  var container = document.getElementById("editar-cards-container");
   if (!container) return;
 
-  const rowSeleccionada = container.querySelector(".tarea-tabla-row.selected");
-  const idxSeleccionado = rowSeleccionada ? parseInt(rowSeleccionada.dataset.idx) : -1;
+  var rowSeleccionada = container.querySelector(".tarea-tabla-row.selected");
+  var compIdxSel = -1;
+  var tareaIdxSel = -1;
+  if (rowSeleccionada) {
+    compIdxSel = parseInt(rowSeleccionada.dataset.componente);
+    tareaIdxSel = parseInt(rowSeleccionada.dataset.tarea);
+  }
 
-  container.innerHTML = renderTablaTareas(corte.tareas, filtroActual);
+  container.innerHTML = renderComponentesCardsEditar(corte, filtroActual);
 
   // Re-seleccionar fila si aun existe
-  if (idxSeleccionado >= 0 && idxSeleccionado < (corte.tareas || []).length) {
-    const nuevaRow = container.querySelector('.tarea-tabla-row[data-idx="' + idxSeleccionado + '"]');
-    if (nuevaRow) {
-      nuevaRow.classList.add("selected");
-      filaSeleccionadaIdx = idxSeleccionado;
-      mostrarFABs(corte, idxSeleccionado);
+  if (compIdxSel >= 0 && tareaIdxSel >= 0) {
+    var t = getTarea(corte, compIdxSel, tareaIdxSel);
+    if (t) {
+      var nuevaRow = container.querySelector('.tarea-tabla-row[data-componente="' + compIdxSel + '"][data-tarea="' + tareaIdxSel + '"]');
+      if (nuevaRow) {
+        nuevaRow.classList.add("selected");
+        filaSeleccionadaIdx = { componenteIdx: compIdxSel, tareaIdx: tareaIdxSel };
+        mostrarFABs(corte, compIdxSel, tareaIdxSel);
+      } else {
+        deseleccionarFila();
+      }
     } else {
       deseleccionarFila();
     }
   }
 
   // Actualizar costo por prenda
-  const costoLabel = document.querySelector(".at-editar__costo-prenda strong");
-  if (costoLabel && corte.tareas) {
-    const costo = corte.tareas.reduce(function (s, t) { return s + (t.precioUnitario || 0); }, 0);
-    costoLabel.textContent = formatCostoTotal(costo);
+  var costoLabel = document.getElementById("at-editar-costo-total");
+  if (costoLabel) {
+    costoLabel.textContent = formatCostoTotal(calcularCostoTotal(corte));
+  }
+
+  // Refrescar chips de componente y costo por componente
+  mostrarFiltroComponentesEditar();
+  actualizarCostoComponenteEditar(getTodasLasTareasConMeta(corte));
+}
+
+// ============================================================
+// AGREGAR COMPONENTE NUEVO desde el input superior
+// ============================================================
+
+async function agregarComponenteEditar(corte) {
+  var input = document.getElementById("input-editar-componente");
+  var errorEl = document.getElementById("error-editar-componente");
+  if (!input || !errorEl) return;
+
+  var nombre = input.value.trim();
+  errorEl.hidden = true;
+  input.classList.remove("form-input--error");
+
+  if (!nombre) {
+    errorEl.textContent = "El nombre del componente no puede estar vacio";
+    errorEl.hidden = false;
+    input.classList.add("form-input--error");
+    input.focus();
+    return;
+  }
+  var duplicado = componentesData.some(function (c) { return c.toLowerCase() === nombre.toLowerCase(); });
+  if (duplicado) {
+    errorEl.textContent = "Ya existe un componente con ese nombre";
+    errorEl.hidden = false;
+    input.classList.add("form-input--error");
+    input.focus();
+    return;
+  }
+
+  var componentesClon = clonarComponentes(corte);
+  componentesClon.push({ nombre: nombre, tareas: [] });
+
+  try {
+    await db.cortes.update(corte.id, { componentes: componentesClon });
+    input.value = "";
+    mostrarToast("Componente creado", "success");
+    if (onDataChangeRef) await onDataChangeRef();
+  } catch (err) {
+    console.error("Error al crear componente:", err);
+    mostrarToast("Error al crear componente", "error");
   }
 }
 
 // ============================================================
-// AGREGAR TAREA INLINE - Desde el formulario inferior
+// AGREGAR TAREA INLINE desde la fila de agregar dentro de un card
 // ============================================================
 
-async function agregarTareaInline(corte, onDataChange) {
-  const inputNombre = document.getElementById("input-editar-nombre-tarea");
-  const inputPrecio = document.getElementById("input-editar-precio-tarea");
-  const errorNombre = document.getElementById("error-editar-nombre-tarea");
-  const errorPrecio = document.getElementById("error-editar-precio-tarea");
+async function agregarTareaCardInline(corte, compIdx, inputNombreEl, inputPrecioEl) {
+  if (!inputNombreEl || !inputPrecioEl) return;
 
-  if (!inputNombre || !inputPrecio) return;
+  var nombre = inputNombreEl.value.trim();
+  var precio = parseInt(inputPrecioEl.value) || 0;
 
-  const nombre = inputNombre.value.trim();
-  const precio = parseInt(inputPrecio.value) || 0;
-
-  // Limpiar errores previos
-  errorNombre.hidden = true;
-  errorPrecio.hidden = true;
-  inputNombre.classList.remove("form-input--error");
-  inputPrecio.classList.remove("form-input--error");
+  inputNombreEl.classList.remove("form-input--error");
+  inputPrecioEl.classList.remove("form-input--error");
 
   if (!nombre) {
-    errorNombre.textContent = "El nombre no puede estar vacio";
-    errorNombre.hidden = false;
-    inputNombre.classList.add("form-input--error");
-    inputNombre.focus();
+    inputNombreEl.classList.add("form-input--error");
+    inputNombreEl.focus();
     return;
   }
   if (precio < 0) {
-    errorPrecio.textContent = "El precio no puede ser negativo";
-    errorPrecio.hidden = false;
-    inputPrecio.classList.add("form-input--error");
-    inputPrecio.focus();
+    inputPrecioEl.classList.add("form-input--error");
+    inputPrecioEl.focus();
     return;
   }
 
-  // Verificar nombre duplicado
-  const duplicado = (corte.tareas || []).some(function (t) {
-    return (t.nombre || "").trim().toLowerCase() === nombre.toLowerCase();
+  // Verificar nombre duplicado en todos los componentes
+  var duplicado = false;
+  (corte.componentes || []).forEach(function (comp) {
+    (comp.tareas || []).forEach(function (t) {
+      if ((t.nombre || "").trim().toLowerCase() === nombre.toLowerCase()) {
+        duplicado = true;
+      }
+    });
   });
   if (duplicado) {
-    errorNombre.textContent = "Ya existe una tarea con ese nombre";
-    errorNombre.hidden = false;
-    inputNombre.classList.add("form-input--error");
-    inputNombre.focus();
+    inputNombreEl.classList.add("form-input--error");
+    inputNombreEl.focus();
     return;
   }
 
-  // Agregar tarea al array del corte
-  const cantidadPrendas = corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0);
-  const tareasActualizadas = (corte.tareas || []).concat([{
-    id: ((corte.tareas || []).length > 0 ? Math.max.apply(null, corte.tareas.map(function (t) { return t.id || 0; })) : 0) + 1,
+  var componentesClon = clonarComponentes(corte);
+
+  // Verificar que el componente exista en el clon
+  if (compIdx >= componentesClon.length) return;
+
+  var cantidadPrendas = corte.tallas ? corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0) : 0;
+  var nuevoId = getNuevoId(corte);
+  var nuevaTarea = {
+    id: nuevoId,
     nombre: nombre,
     precioUnitario: precio,
     unidadesTotales: cantidadPrendas,
     asignaciones: []
-  }]);
+  };
+
+  componentesClon[compIdx].tareas.push(nuevaTarea);
 
   try {
-    await db.cortes.update(corte.id, { tareas: tareasActualizadas });
-    inputNombre.value = "";
-    inputPrecio.value = "";
+    await db.cortes.update(corte.id, { componentes: componentesClon });
+    inputNombreEl.value = "";
+    inputPrecioEl.value = "";
     mostrarToast("Tarea agregada", "success");
-    if (onDataChange) await onDataChange();
+    if (onDataChangeRef) await onDataChangeRef();
   } catch (err) {
     console.error("Error al agregar tarea:", err);
     mostrarToast("Error al agregar tarea", "error");
@@ -344,38 +656,38 @@ async function agregarTareaInline(corte, onDataChange) {
 // FABs - Mostrar / ocultar acciones flotantes al seleccionar fila
 // ============================================================
 
-function seleccionarFila(corte, idx) {
+function seleccionarFila(corte, compIdx, tareaIdx) {
   deseleccionarFila();
-  filaSeleccionadaIdx = idx;
+  filaSeleccionadaIdx = { componenteIdx: compIdx, tareaIdx: tareaIdx };
 
-  const row = document.querySelector('.tarea-tabla-row[data-idx="' + idx + '"]');
+  var row = document.querySelector('.tarea-tabla-row[data-componente="' + compIdx + '"][data-tarea="' + tareaIdx + '"]');
   if (row) row.classList.add("selected");
 
-  mostrarFABs(corte, idx);
+  mostrarFABs(corte, compIdx, tareaIdx);
 }
 
 function deseleccionarFila() {
-  const row = document.querySelector(".tarea-tabla-row.selected");
+  var row = document.querySelector(".tarea-tabla-row.selected");
   if (row) row.classList.remove("selected");
   filaSeleccionadaIdx = null;
   ocultarFABs();
 }
 
-function mostrarFABs(corte, idx) {
+function mostrarFABs(corte, compIdx, tareaIdx) {
   if (ocultarFABsTimeout) {
     clearTimeout(ocultarFABsTimeout);
     ocultarFABsTimeout = null;
   }
 
-  const tarea = (corte.tareas || [])[idx];
+  var tarea = getTarea(corte, compIdx, tareaIdx);
   if (!tarea) return;
 
-  const totalAsignado = (tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
-  const unidadesTotales = tarea.unidadesTotales || 0;
-  const tieneAsignaciones = totalAsignado > 0;
-  const estaCompleta = totalAsignado >= unidadesTotales;
+  var totalAsignado = (tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+  var unidadesTotales = tarea.unidadesTotales || 0;
+  var tieneAsignaciones = totalAsignado > 0;
+  var estaCompleta = totalAsignado >= unidadesTotales;
 
-  let fabContainer = document.getElementById(EDIT_FAB_CONTAINER_ID);
+  var fabContainer = document.getElementById(EDIT_FAB_CONTAINER_ID);
   if (fabContainer) fabContainer.remove();
 
   fabContainer = document.createElement("div");
@@ -414,44 +726,44 @@ function mostrarFABs(corte, idx) {
     if (filaSeleccionadaIdx !== null) {
       db.cortes.get(corte.id).then(function (corteActualizado) {
         if (corteActualizado) {
-          abrirModalEditarTarea(corteActualizado, filaSeleccionadaIdx, onDataChangeRef);
+          abrirModalEditarTarea(corteActualizado, filaSeleccionadaIdx.componenteIdx, filaSeleccionadaIdx.tareaIdx, onDataChangeRef);
         }
       });
     }
   });
 
-  const fabAdd = fabContainer.querySelector(".tarea-fab-add");
+  var fabAdd = fabContainer.querySelector(".tarea-fab-add");
   if (fabAdd) {
     fabAdd.addEventListener("click", function () {
       if (filaSeleccionadaIdx !== null) {
-        abrirModalAgregarTarea(corte, filaSeleccionadaIdx);
+        abrirModalAgregarTarea(corte, filaSeleccionadaIdx.componenteIdx, filaSeleccionadaIdx.tareaIdx);
       }
     });
   }
 
-  const fabAssign = fabContainer.querySelector(".tarea-fab-assign");
+  var fabAssign = fabContainer.querySelector(".tarea-fab-assign");
   if (fabAssign) {
     fabAssign.addEventListener("click", function () {
       if (filaSeleccionadaIdx !== null) {
-        abrirModalAsignarTarea(corte, filaSeleccionadaIdx, onDataChangeRef, trabajadoresMapRef);
+        abrirModalAsignarTarea(corte, filaSeleccionadaIdx.componenteIdx, filaSeleccionadaIdx.tareaIdx, onDataChangeRef, trabajadoresMapRef);
       }
     });
   }
 
-  const fabClearAssign = fabContainer.querySelector(".tarea-fab-clear-assign");
+  var fabClearAssign = fabContainer.querySelector(".tarea-fab-clear-assign");
   if (fabClearAssign) {
     fabClearAssign.addEventListener("click", function () {
       if (filaSeleccionadaIdx !== null) {
-        confirmarEliminarAsignaciones(corte, filaSeleccionadaIdx, onDataChangeRef);
+        confirmarEliminarAsignaciones(corte, filaSeleccionadaIdx.componenteIdx, filaSeleccionadaIdx.tareaIdx, onDataChangeRef);
       }
     });
   }
 
-  const fabDelete = fabContainer.querySelector(".tarea-fab-delete");
+  var fabDelete = fabContainer.querySelector(".tarea-fab-delete");
   if (fabDelete) {
     fabDelete.addEventListener("click", function () {
       if (filaSeleccionadaIdx !== null) {
-        confirmarEliminarTarea(corte, filaSeleccionadaIdx);
+        confirmarEliminarTarea(corte, filaSeleccionadaIdx.componenteIdx, filaSeleccionadaIdx.tareaIdx, onDataChangeRef);
       }
     });
   }
@@ -463,12 +775,12 @@ function mostrarFABs(corte, idx) {
 }
 
 function ocultarFABs() {
-  const fabContainer = document.getElementById(EDIT_FAB_CONTAINER_ID);
+  var fabContainer = document.getElementById(EDIT_FAB_CONTAINER_ID);
   if (!fabContainer) return;
 
   fabContainer.classList.remove("visible");
   ocultarFABsTimeout = setTimeout(function () {
-    const contenedor = document.getElementById(EDIT_FAB_CONTAINER_ID);
+    var contenedor = document.getElementById(EDIT_FAB_CONTAINER_ID);
     if (contenedor) contenedor.remove();
     ocultarFABsTimeout = null;
   }, 300);
@@ -478,16 +790,20 @@ function ocultarFABs() {
 // MODAL EDITAR TAREA
 // ============================================================
 
-function abrirModalEditarTarea(corte, idx, onDataChange) {
-  const tareas = corte.tareas || [];
-  if (idx >= tareas.length) return;
-  const tarea = tareas[idx];
+function abrirModalEditarTarea(corte, compIdx, tareaIdx, onDataChange) {
+  var tarea = getTarea(corte, compIdx, tareaIdx);
+  if (!tarea) return;
+  var compNombre = ((corte.componentes || [])[compIdx] || {}).nombre || COMPONENTE_DEFAULT;
 
-  const overlay = document.createElement("div");
+  var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "modal-editar-tarea-titulo");
+
+  var compOpts = componentesData.length > 0
+    ? componentesData.map(function (c) { return '<option value="' + escaparHTML(c) + '"' + (c === compNombre ? ' selected' : '') + '>' + escaparHTML(c) + '</option>'; }).join("")
+    : '';
 
   overlay.innerHTML =
     '<div class="modal modal--sm">' +
@@ -500,6 +816,11 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
     '<label for="input-editar-tarea-nombre" class="form-label">Nombre de la tarea</label>' +
     '<input type="text" id="input-editar-tarea-nombre" class="form-input" value="' + escaparHTML(tarea.nombre || "") + '" maxlength="60" required autocomplete="off" />' +
     '</div>' +
+    (componentesData.length > 0 ?
+    '<div class="form-group">' +
+    '<label for="input-editar-tarea-componente" class="form-label">Componente</label>' +
+    '<select id="input-editar-tarea-componente" class="form-select">' + compOpts + '</select>' +
+    '</div>' : '') +
     '<div class="form-group">' +
     '<label for="input-editar-tarea-precio" class="form-label">Precio (ctv)</label>' +
     '<input type="number" id="input-editar-tarea-precio" class="form-input" value="' + (tarea.precioUnitario || 0) + '" min="0" max="9999" step="1" autocomplete="off" />' +
@@ -515,8 +836,8 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
 
-  const inputNombre = overlay.querySelector("#input-editar-tarea-nombre");
-  const inputPrecio = overlay.querySelector("#input-editar-tarea-precio");
+  var inputNombre = overlay.querySelector("#input-editar-tarea-nombre");
+  var inputPrecio = overlay.querySelector("#input-editar-tarea-precio");
 
   requestAnimationFrame(function () { inputNombre.focus(); });
 
@@ -527,7 +848,7 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
     if (e.key === "Enter") { e.preventDefault(); overlay.querySelector(".modal-guardar").click(); }
   });
 
-  const cerrar = function () {
+  var cerrar = function () {
     overlay.classList.add("closing");
     setTimeout(function () {
       overlay.remove();
@@ -535,9 +856,12 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
     }, 250);
   };
 
-  const guardar = async function () {
-    const nuevoNombre = inputNombre.value.trim();
-    const nuevoPrecio = parseInt(inputPrecio.value) || 0;
+  var guardar = async function () {
+    var nuevoNombre = inputNombre.value.trim();
+    var nuevoPrecio = parseInt(inputPrecio.value) || 0;
+    var nuevoCompNombre = "";
+    var compSelect = overlay.querySelector("#input-editar-tarea-componente");
+    if (compSelect) nuevoCompNombre = compSelect.value;
 
     if (!nuevoNombre) {
       mostrarToast("El nombre no puede estar vacio", "warning");
@@ -545,15 +869,36 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
       return;
     }
 
-    const tareasActualizadas = (corte.tareas || []).map(function (t, i) {
-      if (i === idx) {
-        return Object.assign({}, t, { nombre: nuevoNombre, precioUnitario: nuevoPrecio });
+    var componentesClon = clonarComponentes(corte);
+
+    // Si cambia de componente, mover la tarea
+    if (nuevoCompNombre && nuevoCompNombre !== compNombre && componentesClon.length > 0) {
+      // Remover del componente original
+      var tareaMovida = componentesClon[compIdx].tareas.splice(tareaIdx, 1)[0];
+      Object.assign(tareaMovida, { nombre: nuevoNombre, precioUnitario: nuevoPrecio });
+
+      // Agregar al nuevo componente
+      var destinoEncontrado = false;
+      for (var i = 0; i < componentesClon.length; i++) {
+        if (componentesClon[i].nombre === nuevoCompNombre) {
+          componentesClon[i].tareas.push(tareaMovida);
+          destinoEncontrado = true;
+          break;
+        }
       }
-      return t;
-    });
+      if (!destinoEncontrado) {
+        componentesClon.push({ nombre: nuevoCompNombre, tareas: [tareaMovida] });
+      }
+    } else {
+      // Mismo componente: solo actualizar datos
+      Object.assign(componentesClon[compIdx].tareas[tareaIdx], { nombre: nuevoNombre, precioUnitario: nuevoPrecio });
+    }
+
+    // Limpiar componentes vacios
+    var compsFiltrados = componentesClon.filter(function (c) { return c.tareas && c.tareas.length > 0; });
 
     try {
-      await db.cortes.update(corte.id, { tareas: tareasActualizadas });
+      await db.cortes.update(corte.id, { componentes: compsFiltrados });
       cerrar();
       mostrarToast("Tarea actualizada", "success");
       if (onDataChange) await onDataChange();
@@ -569,10 +914,10 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
     if (e.target === overlay) cerrar();
   });
 
-  const form = overlay.querySelector("#form-editar-tarea-modal");
+  var form = overlay.querySelector("#form-editar-tarea-modal");
   form.addEventListener("submit", function (e) { e.preventDefault(); guardar(); });
 
-  const escHandler = function (e) {
+  var escHandler = function (e) {
     if (e.key === "Escape") {
       cerrar();
       document.removeEventListener("keydown", escHandler);
@@ -585,12 +930,18 @@ function abrirModalEditarTarea(corte, idx, onDataChange) {
 // MODAL AGREGAR TAREA (debajo de la seleccionada)
 // ============================================================
 
-function abrirModalAgregarTarea(corte, idx) {
-  const overlay = document.createElement("div");
+function abrirModalAgregarTarea(corte, compIdx, tareaIdx) {
+  var compNombre = ((corte.componentes || [])[compIdx] || {}).nombre || COMPONENTE_DEFAULT;
+
+  var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "modal-agregar-tarea-titulo");
+
+  var compOpts = componentesData.length > 0
+    ? '<option value="">Seleccionar componente...</option>' + componentesData.map(function (c) { return '<option value="' + escaparHTML(c) + '"' + (c === compNombre ? ' selected' : '') + '>' + escaparHTML(c) + '</option>'; }).join("")
+    : '';
 
   overlay.innerHTML =
     '<div class="modal modal--sm">' +
@@ -604,6 +955,12 @@ function abrirModalAgregarTarea(corte, idx) {
     '<input type="text" id="input-agregar-tarea-nombre" class="form-input" placeholder="Ej: Costura, Bordado" maxlength="60" required autocomplete="off" />' +
     '<p id="error-agregar-tarea-nombre" class="form-error" hidden></p>' +
     '</div>' +
+    (componentesData.length > 0 ?
+    '<div class="form-group">' +
+    '<label for="input-agregar-tarea-componente" class="form-label">Componente</label>' +
+    '<select id="input-agregar-tarea-componente" class="form-select">' + compOpts + '</select>' +
+    '<p id="error-agregar-tarea-componente" class="form-error" hidden></p>' +
+    '</div>' : '') +
     '<div class="form-group">' +
     '<label for="input-agregar-tarea-precio" class="form-label">Precio (ctv)</label>' +
     '<input type="number" id="input-agregar-tarea-precio" class="form-input" placeholder="0" min="0" max="9999" step="1" autocomplete="off" />' +
@@ -620,10 +977,10 @@ function abrirModalAgregarTarea(corte, idx) {
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
 
-  const inputNombre = overlay.querySelector("#input-agregar-tarea-nombre");
-  const inputPrecio = overlay.querySelector("#input-agregar-tarea-precio");
-  const errorNombre = overlay.querySelector("#error-agregar-tarea-nombre");
-  const errorPrecio = overlay.querySelector("#error-agregar-tarea-precio");
+  var inputNombre = overlay.querySelector("#input-agregar-tarea-nombre");
+  var inputPrecio = overlay.querySelector("#input-agregar-tarea-precio");
+  var errorNombre = overlay.querySelector("#error-agregar-tarea-nombre");
+  var errorPrecio = overlay.querySelector("#error-agregar-tarea-precio");
 
   requestAnimationFrame(function () { inputNombre.focus(); });
 
@@ -634,7 +991,7 @@ function abrirModalAgregarTarea(corte, idx) {
     if (e.key === "Enter") { e.preventDefault(); overlay.querySelector(".modal-guardar").click(); }
   });
 
-  const cerrar = function () {
+  var cerrar = function () {
     overlay.classList.add("closing");
     setTimeout(function () {
       overlay.remove();
@@ -642,9 +999,9 @@ function abrirModalAgregarTarea(corte, idx) {
     }, 250);
   };
 
-  const agregar = async function () {
-    const nombre = inputNombre.value.trim();
-    const precio = parseInt(inputPrecio.value) || 0;
+  var agregar = async function () {
+    var nombre = inputNombre.value.trim();
+    var precio = parseInt(inputPrecio.value) || 0;
 
     errorNombre.hidden = true;
     errorPrecio.hidden = true;
@@ -666,8 +1023,13 @@ function abrirModalAgregarTarea(corte, idx) {
       return;
     }
 
-    const duplicado = (corte.tareas || []).some(function (t) {
-      return (t.nombre || "").trim().toLowerCase() === nombre.toLowerCase();
+    var duplicado = false;
+    (corte.componentes || []).forEach(function (comp) {
+      (comp.tareas || []).forEach(function (t) {
+        if ((t.nombre || "").trim().toLowerCase() === nombre.toLowerCase()) {
+          duplicado = true;
+        }
+      });
     });
     if (duplicado) {
       errorNombre.textContent = "Ya existe una tarea con ese nombre";
@@ -677,19 +1039,54 @@ function abrirModalAgregarTarea(corte, idx) {
       return;
     }
 
-    const cantidadPrendas = corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0);
-    const nuevoId = ((corte.tareas || []).length > 0 ? Math.max.apply(null, corte.tareas.map(function (t) { return t.id || 0; })) : 0) + 1;
-    const nuevasTareas = (corte.tareas || []).slice();
-    nuevasTareas.splice(idx + 1, 0, {
+    var compSelect = overlay.querySelector("#input-agregar-tarea-componente");
+    var compDestinoNombre = compNombre;
+    if (compSelect) {
+      compDestinoNombre = compSelect.value;
+      if (!compDestinoNombre) {
+        var errorComp = overlay.querySelector("#error-agregar-tarea-componente");
+        if (errorComp) {
+          errorComp.textContent = "Selecciona un componente";
+          errorComp.hidden = false;
+        }
+        compSelect.focus();
+        return;
+      }
+    }
+
+    var cantidadPrendas = corte.tallas ? corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0) : 0;
+    var nuevoId = getNuevoId(corte);
+    var nuevaTarea = {
       id: nuevoId,
       nombre: nombre,
       precioUnitario: precio,
       unidadesTotales: cantidadPrendas,
       asignaciones: []
-    });
+    };
+
+    var componentesClon = clonarComponentes(corte);
+
+    // Determinar donde insertar: en el mismo componente, debajo de tareaIdx
+    if (compDestinoNombre === compNombre) {
+      // Mismo componente: insertar debajo de tareaIdx
+      componentesClon[compIdx].tareas.splice(tareaIdx + 1, 0, nuevaTarea);
+    } else {
+      // Diferente componente: agregar al final de ese componente
+      var encontrado = false;
+      for (var i = 0; i < componentesClon.length; i++) {
+        if (componentesClon[i].nombre === compDestinoNombre) {
+          componentesClon[i].tareas.push(nuevaTarea);
+          encontrado = true;
+          break;
+        }
+      }
+      if (!encontrado) {
+        componentesClon.push({ nombre: compDestinoNombre, tareas: [nuevaTarea] });
+      }
+    }
 
     try {
-      await db.cortes.update(corte.id, { tareas: nuevasTareas });
+      await db.cortes.update(corte.id, { componentes: componentesClon });
       cerrar();
       mostrarToast("Tarea agregada", "success");
       if (onDataChangeRef) await onDataChangeRef();
@@ -705,10 +1102,10 @@ function abrirModalAgregarTarea(corte, idx) {
     if (e.target === overlay) cerrar();
   });
 
-  const form = overlay.querySelector("#form-agregar-tarea-modal");
+  var form = overlay.querySelector("#form-agregar-tarea-modal");
   form.addEventListener("submit", function (e) { e.preventDefault(); agregar(); });
 
-  const escHandler = function (e) {
+  var escHandler = function (e) {
     if (e.key === "Escape") {
       cerrar();
       document.removeEventListener("keydown", escHandler);
@@ -719,10 +1116,12 @@ function abrirModalAgregarTarea(corte, idx) {
 
 // ============================================================
 // ELIMINAR TAREA - Con confirmacion, solo si no tiene asignaciones
+// Elimina del componente especifico. Si el componente queda vacio
+// se elimina tambien.
 // ============================================================
 
-function confirmarEliminarTarea(corte, idx) {
-  const tarea = (corte.tareas || [])[idx];
+function confirmarEliminarTarea(corte, compIdx, tareaIdx, onDataChange) {
+  var tarea = getTarea(corte, compIdx, tareaIdx);
   if (!tarea) return;
 
   if (tarea.asignaciones && tarea.asignaciones.length > 0) {
@@ -736,11 +1135,14 @@ function confirmarEliminarTarea(corte, idx) {
     "danger",
     async function () {
       try {
-        const tareasActualizadas = (corte.tareas || []).filter(function (_, i) { return i !== idx; });
-        await db.cortes.update(corte.id, { tareas: tareasActualizadas });
+        var componentesClon = clonarComponentes(corte);
+        componentesClon[compIdx].tareas.splice(tareaIdx, 1);
+        // Limpiar componentes que quedaron sin tareas
+        var compsFiltrados = componentesClon.filter(function (c) { return c.tareas && c.tareas.length > 0; });
+        await db.cortes.update(corte.id, { componentes: compsFiltrados });
         deseleccionarFila();
         mostrarToast("Tarea eliminada", "success");
-        if (onDataChangeRef) await onDataChangeRef();
+        if (onDataChange || onDataChangeRef) await (onDataChange || onDataChangeRef)();
       } catch (err) {
         console.error("Error al eliminar tarea:", err);
         mostrarToast("Error al eliminar", "error");
@@ -752,44 +1154,69 @@ function confirmarEliminarTarea(corte, idx) {
 }
 
 // ============================================================
-// ACTUALIZAR PRENDA - Sincroniza tareas no asignadas al template
-// Filtra tareas sin asignaciones y las guarda como las tareas
-// de la prenda base, manteniendo un historial util.
+// ELIMINAR COMPONENTE (solo si esta vacio)
+// ============================================================
+
+function confirmarEliminarComponente(corte, compIdx) {
+  var comp = (corte.componentes || [])[compIdx];
+  if (!comp) return;
+
+  var nombreComp = comp.nombre || COMPONENTE_DEFAULT;
+
+  mostrarModalConfirmar(
+    "Eliminar Componente",
+    'Estas seguro de eliminar el componente "' + nombreComp + '"? Esta accion no se puede deshacer.',
+    "danger",
+    async function () {
+      try {
+        var componentesClon = clonarComponentes(corte);
+        componentesClon.splice(compIdx, 1);
+        await db.cortes.update(corte.id, { componentes: componentesClon });
+        deseleccionarFila();
+        mostrarToast("Componente eliminado", "success");
+        if (onDataChangeRef) await onDataChangeRef();
+      } catch (err) {
+        console.error("Error al eliminar componente:", err);
+        mostrarToast("Error al eliminar componente", "error");
+      }
+    },
+    undefined,
+    "Eliminar"
+  );
+}
+
+// ============================================================
+// ACTUALIZAR PRENDA - Sincroniza tareas al template de la prenda
+// Recorre todos los componentes y preserva la estructura.
+// Las tareas asignadas se mantienen, las no asignadas se copian.
 // ============================================================
 
 function confirmarActualizarPrenda(corte, prenda, onDataChange) {
-  const tareasNoAsignadas = (corte.tareas || []).filter(function (t) {
-    return !t.asignaciones || t.asignaciones.length === 0;
-  }).map(function (t) {
-    return { nombre: t.nombre, precioUnitario: t.precioUnitario };
+  var comps = corte.componentes || [];
+  var totalTareas = 0;
+  comps.forEach(function (comp) {
+    totalTareas += (comp.tareas || []).length;
   });
 
-  // Combinar con tareas que tenian asignaciones (mantener ambas en la prenda)
-  const tareasAsignadas = (corte.tareas || []).filter(function (t) {
-    return t.asignaciones && t.asignaciones.length > 0;
-  }).map(function (t) {
-    return { nombre: t.nombre, precioUnitario: t.precioUnitario };
-  });
-
-  // Mantener las tareas asignadas mas las no asignadas (sin duplicados por nombre)
-  const tareasFinales = [];
-  const nombresAgregados = {};
-  tareasAsignadas.concat(tareasNoAsignadas).forEach(function (t) {
-    const clave = t.nombre.trim().toLowerCase();
-    if (!nombresAgregados[clave]) {
-      nombresAgregados[clave] = true;
+  // Mantener la estructura de componentes completa
+  var prendaComponentes = comps.map(function (comp) {
+    var tareasFinales = [];
+    (comp.tareas || []).forEach(function (t) {
       tareasFinales.push({ nombre: t.nombre.trim(), precioUnitario: t.precioUnitario });
-    }
+    });
+    return { nombre: comp.nombre, tareas: tareasFinales };
+  }).filter(function (comp) {
+    return comp.tareas.length > 0;
   });
 
   mostrarModalConfirmar(
     "Actualizar Prenda",
-    "Se actualizara la prenda \"" + (prenda.nombre || "") + "\" con " + tareasFinales.length + " tareas del corte. Las tareas existentes en la prenda seran reemplazadas.",
+    "Se actualizara la prenda \"" + (prenda.nombre || "") + "\" con " + totalTareas + " tareas de " + prendaComponentes.length + " componentes. Las tareas existentes en la prenda seran reemplazadas.",
     "info",
     async function () {
       try {
-        await db.prendas.update(corte.prendaId, { tareas: tareasFinales });
-        mostrarToast("Prenda actualizada con " + tareasFinales.length + " tareas", "success");
+        await db.prendas.update(corte.prendaId, { componentes: prendaComponentes });
+        mostrarToast("Prenda actualizada con " + totalTareas + " tareas", "success");
         if (onDataChange) await onDataChange();
       } catch (err) {
         console.error("Error al actualizar prenda:", err);
@@ -798,5 +1225,3 @@ function confirmarActualizarPrenda(corte, prenda, onDataChange) {
     }
   );
 }
-
-

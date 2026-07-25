@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { escaparHTML, formatCtv, formatCostoTotal, centavosABolivianos } from "../utils.js";
+import { escaparHTML, formatCtv, formatCostoTotal, centavosABolivianos, COMPONENTE_DEFAULT } from "../utils.js";
 import { mostrarModalConfirmar, mostrarToast, crearHeader, estadoVacioHTML } from "./shared.js";
 
 // ============================================================
@@ -12,13 +12,14 @@ const TASK_FAB_CONTAINER_ID = "nc-tareas-fab-container";
 /** ID de la prenda actualmente seleccionada en el dropdown */
 let prendaSeleccionadaId = null;
 
-/** Array local de tareas (clonadas de la prenda o agregadas manualmente) */
-let tareasData = [];
+/** Array local de componentes (clonados de la prenda o agregados manualmente)
+ *  Estructura: [{nombre: "Delanteros", tareas: [{nombre, precioUnitario}, ...]}, ...] */
+let componentesData = [];
 
 /** Array local de tallas agregadas por el usuario */
 let tallasData = [];
 
-/** Indice de la fila de tarea actualmente seleccionada (o null) */
+/** Indices de la fila de tarea actualmente seleccionada (o null) */
 let filaTareaSeleccionada = null;
 
 /** Timeout para ocultar FABs con delay (permite animacion CSS de salida) */
@@ -45,7 +46,7 @@ export async function renderNuevoCorte() {
   clickAbortControllerNC = new AbortController();
 
   prendaSeleccionadaId = null;
-  tareasData = [];
+  componentesData = [];
   tallasData = [];
   filaTareaSeleccionada = null;
 
@@ -69,7 +70,13 @@ export async function renderNuevoCorte() {
     : '<option value="">Seleccionar tipo de prenda...</option>' +
       prendas.map(function (p) {
         var nombre = escaparHTML(p.nombre);
-        return '<option value="' + p.id + '">' + nombre + ' (' + (p.tareas ? p.tareas.length : 0) + ' tareas)</option>';
+        var numTareas = 0;
+        if (p.componentes && p.componentes.length > 0) {
+          numTareas = p.componentes.reduce(function (s, c) { return s + (c.tareas ? c.tareas.length : 0); }, 0);
+        } else if (p.tareas) {
+          numTareas = p.tareas.length;
+        }
+        return '<option value="' + p.id + '">' + nombre + ' (' + numTareas + ' tareas)</option>';
       }).join("");
 
   var htmlFormulario =
@@ -121,26 +128,23 @@ export async function renderNuevoCorte() {
 
     '<div id="nc-form-rest">' +
     '<div class="form-group">' +
+    '<div class="componentes-section-header">' +
+    '<span class="section-title">Componentes</span>' +
+    '<span class="componentes-hint">Agrega componentes para agrupar las tareas (Ej: Delanteros, Traseros).</span>' +
+    '</div>' +
+    '<div class="componentes-input-row" id="nc-agregar-componente-row">' +
+    '<input type="text" id="input-nc-componente" class="form-input" placeholder="Ej: Delanteros" maxlength="30" autocomplete="off" />' +
+    '<button type="button" class="btn btn--outline btn--sm" id="btn-nc-agregar-componente">Agregar</button>' +
+    '</div>' +
+    '<p id="error-nc-componente" class="form-error" hidden></p>' +
+    '</div>' +
+    '<div class="form-group">' +
     '<div class="tareas-section-header">' +
     '<span class="section-title">Tareas</span>' +
     '</div>' +
-    '<div id="tareas-tabla-container">' +
-    renderTareasTabla(tareasData) +
+    '<div id="tareas-cards-container">' +
+    renderComponentesCards(componentesData) +
     '</div>' +
-    '</div>' +
-    '<div class="form-group" id="nc-form-agregar-tarea">' +
-    '<div class="agregar-tarea-row">' +
-    '<input type="text" id="input-nc-nombre-tarea" class="form-input" placeholder="Nombre de la tarea" maxlength="60" autocomplete="off" />' +
-    '<div class="input-precio-ctv-wrapper">' +
-    '<input type="number" id="input-nc-precio-tarea" class="form-input" placeholder="0" min="0" max="9999" step="1" autocomplete="off" />' +
-    '<span class="input-precio-ctv-sufijo">ctv</span>' +
-    '</div>' +
-    '<button type="button" class="btn btn--outline btn--sm" id="btn-nc-agregar-tarea">' +
-    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
-    '</button>' +
-    '</div>' +
-    '<p id="error-nc-nombre-tarea" class="form-error" hidden></p>' +
-    '<p id="error-nc-precio-tarea" class="form-error" hidden></p>' +
     '</div>' +
     '<div class="form-group" id="resumen-costos-container" style="display:none;">' +
     '<div class="resumen-costos">' +
@@ -157,6 +161,46 @@ export async function renderNuevoCorte() {
 
   document.getElementById("select-prenda").addEventListener("change", onPrendaChange);
   document.getElementById("btn-nueva-prenda-inline").addEventListener("click", abrirModalNuevaPrenda);
+
+  // Agregar componente desde el input
+  var btnAgregarComp = document.getElementById("btn-nc-agregar-componente");
+  if (btnAgregarComp) {
+    btnAgregarComp.addEventListener("click", function () {
+      var input = document.getElementById("input-nc-componente");
+      var errorEl = document.getElementById("error-nc-componente");
+      var nombre = input.value.trim();
+      errorEl.hidden = true;
+      input.classList.remove("form-input--error");
+
+      if (!nombre) {
+        errorEl.textContent = "El nombre del componente no puede estar vacio";
+        errorEl.hidden = false;
+        input.classList.add("form-input--error");
+        input.focus();
+        return;
+      }
+      var duplicado = componentesData.some(function (c) { return c.nombre.toLowerCase() === nombre.toLowerCase(); });
+      if (duplicado) {
+        errorEl.textContent = "Ya existe un componente con ese nombre";
+        errorEl.hidden = false;
+        input.classList.add("form-input--error");
+        input.focus();
+        return;
+      }
+
+      componentesData.push({ nombre: nombre, tareas: [] });
+      input.value = "";
+      input.focus();
+      refrescarTareasCards();
+    });
+
+    document.getElementById("input-nc-componente").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        document.getElementById("btn-nc-agregar-componente").click();
+      }
+    });
+  }
 
   document.getElementById("form-tallas").addEventListener("submit", function (e) {
     e.preventDefault();
@@ -188,90 +232,125 @@ export async function renderNuevoCorte() {
 
   document.getElementById("btn-guardar-corte").addEventListener("click", guardarCorte);
 
-  document.getElementById("btn-nc-agregar-tarea").addEventListener("click", function () {
-    var inputNombre = document.getElementById("input-nc-nombre-tarea");
-    var inputPrecio = document.getElementById("input-nc-precio-tarea");
-    var errorNombre = document.getElementById("error-nc-nombre-tarea");
-    var errorPrecio = document.getElementById("error-nc-precio-tarea");
-    var nombre = inputNombre.value.trim();
-    var precio = parseInt(inputPrecio.value) || 0;
+  // Delegacion de eventos en el contenedor de cards de tareas
+  var cardsContainer = document.getElementById("tareas-cards-container");
+  if (cardsContainer) {
+    cardsContainer.addEventListener("click", function (e) {
+      // Toggle colapsar/expandir card
+      var header = e.target.closest(".componente-card__header");
+      if (header) {
+        var card = header.closest(".componente-card");
+        if (card) card.classList.toggle("componente-card--collapsed");
+        return;
+      }
 
-    errorNombre.hidden = true;
-    errorPrecio.hidden = true;
-    inputNombre.classList.remove("form-input--error");
-    inputPrecio.classList.remove("form-input--error");
+      // Boton agregar tarea inline en una card
+      var addBtn = e.target.closest(".componente-add-btn");
+      if (addBtn) {
+        var card = addBtn.closest(".componente-card");
+        if (!card) return;
+        var compIdx = parseInt(card.dataset.componenteIdx);
+        var inputNombre = card.querySelector(".componente-add-nombre");
+        var inputPrecio = card.querySelector(".componente-add-precio");
+        var nombre = inputNombre ? inputNombre.value.trim() : "";
+        var precio = parseInt(inputPrecio ? inputPrecio.value : 0) || 0;
 
-    if (!nombre) {
-      errorNombre.textContent = "El nombre no puede estar vacio";
-      errorNombre.hidden = false;
-      inputNombre.classList.add("form-input--error");
-      inputNombre.focus();
-      return;
-    }
-    if (precio < 0) {
-      errorPrecio.textContent = "El precio no puede ser negativo";
-      errorPrecio.hidden = false;
-      inputPrecio.classList.add("form-input--error");
-      inputPrecio.focus();
-      return;
-    }
-    var nombreDuplicado = tareasData.some(function (t) {
-      return t.nombre.trim().toLowerCase() === nombre.toLowerCase();
+        if (inputNombre) inputNombre.classList.remove("form-input--error");
+        if (inputPrecio) inputPrecio.classList.remove("form-input--error");
+
+        if (!nombre) {
+          if (inputNombre) {
+            inputNombre.classList.add("form-input--error");
+            inputNombre.focus();
+          }
+          return;
+        }
+        if (precio < 0) {
+          if (inputPrecio) {
+            inputPrecio.classList.add("form-input--error");
+            inputPrecio.focus();
+          }
+          return;
+        }
+
+        // Verificar nombre duplicado en todas las tareas de todos los componentes
+        var nombreDuplicado = false;
+        for (var ci = 0; ci < componentesData.length; ci++) {
+          if (componentesData[ci].tareas.some(function (t) {
+            return t.nombre.trim().toLowerCase() === nombre.toLowerCase();
+          })) {
+            nombreDuplicado = true;
+            break;
+          }
+        }
+        if (nombreDuplicado) {
+          if (inputNombre) {
+            inputNombre.classList.add("form-input--error");
+            inputNombre.focus();
+          }
+          return;
+        }
+
+        if (!isNaN(compIdx) && compIdx >= 0 && compIdx < componentesData.length) {
+          componentesData[compIdx].tareas.push({ nombre: nombre, precioUnitario: precio });
+        }
+        if (inputNombre) inputNombre.value = "";
+        if (inputPrecio) inputPrecio.value = "";
+        refrescarTareasCards();
+        return;
+      }
+
+      // Click en fila de tarea (seleccion)
+      var row = e.target.closest(".tarea-tabla-row");
+      if (row && !e.target.closest("button")) {
+        var compIdx = parseInt(row.dataset.componente);
+        var tareaIdx = parseInt(row.dataset.tarea);
+        seleccionarFilaTarea(compIdx, tareaIdx);
+        return;
+      }
+
+      // Botones de accion en fila de tarea
+      if (e.target.closest(".btn-eliminar-tarea-row")) {
+        row = e.target.closest(".tarea-tabla-row");
+        eliminarTarea(parseInt(row.dataset.componente), parseInt(row.dataset.tarea));
+        return;
+      }
+      if (e.target.closest(".btn-editar-tarea-row")) {
+        row = e.target.closest(".tarea-tabla-row");
+        abrirModalEditarTarea(parseInt(row.dataset.componente), parseInt(row.dataset.tarea));
+        return;
+      }
+      if (e.target.closest(".btn-agregar-debajo-row")) {
+        row = e.target.closest(".tarea-tabla-row");
+        abrirModalAgregarTarea(parseInt(row.dataset.componente), parseInt(row.dataset.tarea));
+        return;
+      }
     });
-    if (nombreDuplicado) {
-      errorNombre.textContent = "Ya existe una tarea con ese nombre";
-      errorNombre.hidden = false;
-      inputNombre.classList.add("form-input--error");
-      inputNombre.focus();
-      return;
-    }
 
-    tareasData.push({ nombre: nombre, precioUnitario: precio });
-    inputNombre.value = "";
-    inputPrecio.value = "";
-    refrescarTareasTabla();
-  });
-
-  document.getElementById("input-nc-nombre-tarea").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      document.getElementById("input-nc-precio-tarea").focus();
-    }
-  });
-  document.getElementById("input-nc-precio-tarea").addEventListener("keydown", function (e) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      document.getElementById("btn-nc-agregar-tarea").click();
-    }
-  });
+    // Manejar keydown en inputs inline de agregar tarea
+    cardsContainer.addEventListener("keydown", function (e) {
+      if (e.target.classList.contains("componente-add-nombre") && e.key === "Enter") {
+        e.preventDefault();
+        var card = e.target.closest(".componente-card");
+        if (card) {
+          var precioInput = card.querySelector(".componente-add-precio");
+          if (precioInput) precioInput.focus();
+        }
+      } else if (e.target.classList.contains("componente-add-precio") && e.key === "Enter") {
+        e.preventDefault();
+        var card = e.target.closest(".componente-card");
+        if (card) {
+          var addBtn2 = card.querySelector(".componente-add-btn");
+          if (addBtn2) addBtn2.click();
+        }
+      }
+    });
+  }
 
   document.getElementById("input-talla-nombre").addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
       e.preventDefault();
       document.getElementById("input-talla-cantidad").focus();
-    }
-  });
-
-  container.addEventListener("click", function (e) {
-    var row = e.target.closest(".tarea-tabla-row");
-    if (row && !e.target.closest("button")) {
-      seleccionarFilaTarea(parseInt(row.dataset.idx));
-      return;
-    }
-    if (e.target.closest(".btn-eliminar-tarea-row")) {
-      row = e.target.closest(".tarea-tabla-row");
-      eliminarTarea(parseInt(row.dataset.idx));
-      return;
-    }
-    if (e.target.closest(".btn-editar-tarea-row")) {
-      row = e.target.closest(".tarea-tabla-row");
-      abrirModalEditarTarea(parseInt(row.dataset.idx));
-      return;
-    }
-    if (e.target.closest(".btn-agregar-debajo-row")) {
-      row = e.target.closest(".tarea-tabla-row");
-      abrirModalAgregarTarea(parseInt(row.dataset.idx));
-      return;
     }
   });
 
@@ -321,14 +400,22 @@ function hayCambiosSinGuardar() {
   if (nombreActual !== "") return true;
   if (precioActual !== 0) return true;
   if (tallasData.length > 0) return true;
-  if (tareasData.length > 0) return true;
+
+  var tieneTareas = false;
+  for (var ci = 0; ci < componentesData.length; ci++) {
+    if (componentesData[ci].tareas.length > 0) {
+      tieneTareas = true;
+      break;
+    }
+  }
+  if (tieneTareas) return true;
 
   return false;
 }
 
 // ============================================================
 // SELECTOR DE PRENDA - Al cambiar la prenda seleccionada
-// clona sus tareas al estado local y refresca la tabla.
+// clona sus componentes al estado local y refresca la tabla.
 // ============================================================
 
 function onPrendaChange() {
@@ -336,21 +423,26 @@ function onPrendaChange() {
   var id = select.value ? parseInt(select.value) : null;
   if (!id) {
     prendaSeleccionadaId = null;
-    tareasData = [];
-    refrescarTareasTabla();
+    componentesData = [];
+    refrescarTareasCards();
     actualizarResumenCostos();
     return;
   }
   prendaSeleccionadaId = id;
   db.prendas.get(id).then(function (prenda) {
-    if (prenda && prenda.tareas) {
-      tareasData = prenda.tareas.map(function (t) {
-        return { nombre: t.nombre, precioUnitario: t.precioUnitario };
+    if (prenda && prenda.componentes && prenda.componentes.length > 0) {
+      componentesData = prenda.componentes.map(function (comp) {
+        return {
+          nombre: comp.nombre,
+          tareas: (comp.tareas || []).map(function (t) {
+            return { nombre: t.nombre, precioUnitario: t.precioUnitario || 0 };
+          })
+        };
       });
     } else {
-      tareasData = [];
+      componentesData = [];
     }
-    refrescarTareasTabla();
+    refrescarTareasCards();
     actualizarResumenCostos();
   }).catch(function (err) {
     console.error("Error al cargar prenda:", err);
@@ -449,64 +541,123 @@ function renderTallasBadges() {
 }
 
 // ============================================================
-// TABLA DE TAREAS - Render, refresh, seleccion de fila y FABs
-// Mismo patron que gestion-prendas.js: tabla con header, filas
-// con botones inline, y FABs flotantes al seleccionar fila.
+// TAREAS - Renderizado de cards colapsables por componente
+// Cada card contiene su propia tabla de tareas y un form
+// inline para agregar nuevas tareas a ese componente.
 // ============================================================
 
-function eliminarTarea(idx) {
-  tareasData.splice(idx, 1);
-  refrescarTareasTabla();
+function eliminarTarea(compIdx, tareaIdx) {
+  if (compIdx >= componentesData.length) return;
+  if (tareaIdx >= componentesData[compIdx].tareas.length) return;
+  componentesData[compIdx].tareas.splice(tareaIdx, 1);
+  refrescarTareasCards();
   deseleccionarFilaTarea();
   mostrarToast("Tarea eliminada", "success");
 }
 
-function renderTareasTabla(tareas) {
-  if (!tareas || tareas.length === 0) {
-    return estadoVacioHTML("Sin tareas", "Selecciona una prenda para heredar sus tareas o agrega tareas manualmente");
+function renderComponentesCards(componentes) {
+  if (!componentes || componentes.length === 0) {
+    return estadoVacioHTML("Sin componentes", "Selecciona una prenda o crea componentes con el boton de arriba");
   }
-  return '<div class="tareas-tabla">' +
-    '<div class="tareas-tabla-header">' +
-    '<span class="tareas-tabla-header__nombre">Tarea</span>' +
-    '<span class="tareas-tabla-header__precio">Precio (ctv)</span>' +
-    '<span class="tareas-tabla-header__acciones"></span>' +
-    '</div>' +
-    tareas.map(function (t, idx) { return crearFilaTareaHTML(t, idx); }).join("") +
-    '</div>';
+
+  var html = "";
+  for (var ci = 0; ci < componentes.length; ci++) {
+    var comp = componentes[ci];
+    var numTareas = (comp.tareas && comp.tareas.length) ? comp.tareas.length : 0;
+
+    // Calcular subtotal del componente (suma de precios en centavos)
+    var subtotal = 0;
+    for (var ti = 0; ti < numTareas; ti++) {
+      subtotal += (comp.tareas[ti].precioUnitario || 0);
+    }
+
+    html += '<div class="componente-card" data-componente-idx="' + ci + '">' +
+      '<div class="componente-card__header" role="button" tabindex="0" aria-expanded="true">' +
+      '<svg class="componente-card__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<polyline points="6 9 12 15 18 9"/>' +
+      '</svg>' +
+      '<span class="componente-card__title">' + escaparHTML(comp.nombre) + '</span>' +
+      '<span class="componente-card__count">' + numTareas + ' tarea' + (numTareas !== 1 ? 's' : '') + '</span>' +
+      '<span class="componente-card__subtotal">' + formatCostoTotal(subtotal) + '</span>' +
+      '</div>' +
+      '<div class="componente-card__body">';
+
+    if (numTareas > 0) {
+      html += '<div class="tareas-tabla">' +
+        '<div class="tareas-tabla-header">' +
+        '<span class="tareas-tabla-header__nombre">Tarea</span>' +
+        '<span class="tareas-tabla-header__precio">Precio (ctv)</span>' +
+        '<span class="tareas-tabla-header__acciones"></span>' +
+        '</div>';
+
+      for (var ti = 0; ti < numTareas; ti++) {
+        html += crearFilaTareaHTMLCard(comp.tareas[ti], ci, ti);
+      }
+
+      html += '</div>';
+    } else {
+      html += '<p class="form-hint" style="padding:var(--space-3) var(--space-3);text-align:center;margin:0;border-bottom:1px solid var(--color-divider);">Sin tareas en este componente</p>';
+    }
+
+    // Fila inline para agregar tarea a este componente
+    html += '<div class="componente-card__add-row">' +
+      '<input type="text" class="form-input componente-add-nombre" placeholder="Nueva tarea..." maxlength="60" autocomplete="off" />' +
+      '<div class="input-precio-ctv-wrapper">' +
+      '<input type="number" class="form-input componente-add-precio" placeholder="0" min="0" max="9999" step="1" autocomplete="off" />' +
+      '<span class="input-precio-ctv-sufijo">ctv</span>' +
+      '</div>' +
+      '<button type="button" class="btn btn--outline btn--sm componente-add-btn">' +
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
+      '</button>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+  }
+
+  return html;
 }
 
-function crearFilaTareaHTML(tarea, idx) {
+function crearFilaTareaHTMLCard(tarea, compIdx, tareaIdx) {
   var nombre = escaparHTML(tarea.nombre || "");
   var precio = tarea.precioUnitario || 0;
-  return '<div class="tarea-tabla-row" data-idx="' + idx + '" tabindex="0">' +
+
+  return '<div class="tarea-tabla-row" data-componente="' + compIdx + '" data-tarea="' + tareaIdx + '" tabindex="0">' +
     '<span class="tarea-tabla-nombre">' + (nombre || "<em>Sin nombre</em>") + '</span>' +
+    '<span class="tarea-tabla-componente" style="display:none;"></span>' +
     '<span class="tarea-tabla-precio">' + formatCtv(precio) + '</span>' +
     '<div class="tarea-tabla-acciones">' +
-    '<button type="button" class="btn btn--ghost btn--sm btn-editar-tarea-row" data-idx="' + idx + '" aria-label="Editar tarea">' +
+    '<button type="button" class="btn btn--ghost btn--sm btn-editar-tarea-row" data-componente="' + compIdx + '" data-tarea="' + tareaIdx + '" aria-label="Editar tarea">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
     '</button>' +
-    '<button type="button" class="btn btn--ghost btn--sm btn-agregar-debajo-row" data-idx="' + idx + '" aria-label="Agregar tarea debajo">' +
+    '<button type="button" class="btn btn--ghost btn--sm btn-agregar-debajo-row" data-componente="' + compIdx + '" data-tarea="' + tareaIdx + '" aria-label="Agregar tarea debajo">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>' +
     '</button>' +
-    '<button type="button" class="btn btn--ghost btn--sm btn-eliminar-tarea-row" data-idx="' + idx + '" aria-label="Eliminar tarea">' +
+    '<button type="button" class="btn btn--ghost btn--sm btn-eliminar-tarea-row" data-componente="' + compIdx + '" data-tarea="' + tareaIdx + '" aria-label="Eliminar tarea">' +
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
     '</button>' +
     '</div>' +
     '</div>';
 }
 
-function refrescarTareasTabla() {
-  var container = document.getElementById("tareas-tabla-container");
+function refrescarTareasCards() {
+  var container = document.getElementById("tareas-cards-container");
   if (!container) return;
 
+  var selCompIdx = -1;
+  var selTareaIdx = -1;
   var rowSeleccionada = container.querySelector(".tarea-tabla-row.selected");
-  var idxSeleccionado = rowSeleccionada ? parseInt(rowSeleccionada.dataset.idx) : -1;
+  if (rowSeleccionada) {
+    selCompIdx = parseInt(rowSeleccionada.dataset.componente);
+    selTareaIdx = parseInt(rowSeleccionada.dataset.tarea);
+  }
 
-  container.innerHTML = renderTareasTabla(tareasData);
+  container.innerHTML = renderComponentesCards(componentesData);
   actualizarResumenCostos();
 
-  if (idxSeleccionado >= 0 && idxSeleccionado < tareasData.length) {
-    var nuevaRow = container.querySelector('.tarea-tabla-row[data-idx="' + idxSeleccionado + '"]');
+  if (selCompIdx >= 0 && selCompIdx < componentesData.length &&
+      selTareaIdx >= 0 && selTareaIdx < componentesData[selCompIdx].tareas.length) {
+    var nuevaRow = container.querySelector('.tarea-tabla-row[data-componente="' + selCompIdx + '"][data-tarea="' + selTareaIdx + '"]');
     if (nuevaRow) nuevaRow.classList.add("selected");
   }
 }
@@ -523,12 +674,22 @@ function actualizarResumenCostos() {
   var container = document.getElementById("resumen-costos-container");
   if (!container) return;
 
-  if (tareasData.length === 0 || tallasData.length === 0) {
+  var totalTareas = 0;
+  for (var ci = 0; ci < componentesData.length; ci++) {
+    totalTareas += componentesData[ci].tareas.length;
+  }
+  if (totalTareas === 0 || tallasData.length === 0) {
     container.style.display = "none";
     return;
   }
 
-  var costoUnitarioCentavos = tareasData.reduce(function (s, t) { return s + (t.precioUnitario || 0); }, 0);
+  var costoUnitarioCentavos = 0;
+  for (var ci = 0; ci < componentesData.length; ci++) {
+    for (var ti = 0; ti < componentesData[ci].tareas.length; ti++) {
+      costoUnitarioCentavos += (componentesData[ci].tareas[ti].precioUnitario || 0);
+    }
+  }
+
   var cantidadPrendas = tallasData.reduce(function (s, t) { return s + t.cantidad; }, 0);
   var precioVentaInput = document.getElementById("input-precio-venta");
   var precioVentaUnitario = precioVentaInput ? (parseFloat(precioVentaInput.value) || 0) : 0;
@@ -575,10 +736,10 @@ function renderResumenCostosHTMLInterno(costoUnitarioCtv, costoTotalBs, ventaTot
 // FABs DE TAREA - Seleccionar fila y mostrar acciones flotantes
 // ============================================================
 
-function seleccionarFilaTarea(idx) {
+function seleccionarFilaTarea(compIdx, tareaIdx) {
   deseleccionarFilaTarea();
-  filaTareaSeleccionada = idx;
-  var row = document.querySelector('.tarea-tabla-row[data-idx="' + idx + '"]');
+  filaTareaSeleccionada = { componenteIdx: compIdx, tareaIdx: tareaIdx };
+  var row = document.querySelector('.tarea-tabla-row[data-componente="' + compIdx + '"][data-tarea="' + tareaIdx + '"]');
   if (row) row.classList.add("selected");
   mostrarTareaFABs();
 }
@@ -637,13 +798,13 @@ function manejarClickDocumentoNC(e) {
   var fueTareaRow = e.target.closest(".tarea-tabla-row");
 
   if (fueTareaFab && filaTareaSeleccionada !== null && filaTareaSeleccionada !== undefined) {
-    var idx = filaTareaSeleccionada;
+    var sel = filaTareaSeleccionada;
     if (fueTareaFab.classList.contains("tarea-fab-edit")) {
-      abrirModalEditarTarea(idx);
+      abrirModalEditarTarea(sel.componenteIdx, sel.tareaIdx);
     } else if (fueTareaFab.classList.contains("tarea-fab-add")) {
-      abrirModalAgregarTarea(idx);
+      abrirModalAgregarTarea(sel.componenteIdx, sel.tareaIdx);
     } else if (fueTareaFab.classList.contains("tarea-fab-delete")) {
-      eliminarTarea(idx);
+      eliminarTarea(sel.componenteIdx, sel.tareaIdx);
     }
     return;
   }
@@ -655,32 +816,24 @@ function manejarClickDocumentoNC(e) {
   }
 }
 
-function obtenerTareasData() {
-  var filas = document.querySelectorAll(".tarea-tabla-row");
-  if (filas.length === 0) return null;
-
-  var result = [];
-  filas.forEach(function (fila) {
-    var nombre = fila.querySelector(".tarea-tabla-nombre") ? fila.querySelector(".tarea-tabla-nombre").textContent : "";
-    var precio = parseInt(fila.querySelector(".tarea-tabla-precio") ? fila.querySelector(".tarea-tabla-precio").textContent : "0") || 0;
-    result.push({ nombre: nombre, precioUnitario: precio });
-  });
-  return result;
-}
-
 // ============================================================
 // MODALES DE TAREA - Editar, agregar y crear nueva prenda inline
 // ============================================================
 
-function abrirModalEditarTarea(idx) {
-  if (idx >= tareasData.length) return;
-  var tarea = tareasData[idx];
+function abrirModalEditarTarea(compIdx, tareaIdx) {
+  if (compIdx >= componentesData.length) return;
+  if (tareaIdx >= componentesData[compIdx].tareas.length) return;
+  var tarea = componentesData[compIdx].tareas[tareaIdx];
 
   var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "modal-nc-tarea-titulo");
+
+  var compOpts = componentesData.map(function (c, ci) {
+    return '<option value="' + ci + '"' + (ci === compIdx ? ' selected' : '') + '>' + escaparHTML(c.nombre) + '</option>';
+  }).join("");
 
   overlay.innerHTML =
     '<div class="modal modal--sm modal-edit">' +
@@ -692,6 +845,10 @@ function abrirModalEditarTarea(idx) {
     '<div class="form-group">' +
     '<label for="input-nc-tarea-nombre" class="form-label">Nombre de la tarea</label>' +
     '<input type="text" id="input-nc-tarea-nombre" class="form-input" value="' + escaparHTML(tarea.nombre || "") + '" maxlength="60" required autocomplete="off" />' +
+    '</div>' +
+    '<div class="form-group">' +
+    '<label for="input-nc-tarea-componente" class="form-label">Componente</label>' +
+    '<select id="input-nc-tarea-componente" class="form-select">' + compOpts + '</select>' +
     '</div>' +
     '<div class="form-group">' +
     '<label for="input-nc-tarea-precio" class="form-label">Precio (ctv)</label>' +
@@ -739,6 +896,8 @@ function abrirModalEditarTarea(idx) {
   var guardar = function () {
     var nuevoNombre = inputNombre.value.trim();
     var nuevoPrecio = parseInt(inputPrecio.value) || 0;
+    var compSelect = overlay.querySelector("#input-nc-tarea-componente");
+    var nuevoCompIdx = parseInt(compSelect.value);
 
     if (!nuevoNombre) {
       mostrarToast("El nombre no puede estar vacio", "warning");
@@ -746,11 +905,18 @@ function abrirModalEditarTarea(idx) {
       return;
     }
 
-    if (idx < tareasData.length) {
-      tareasData[idx].nombre = nuevoNombre;
-      tareasData[idx].precioUnitario = nuevoPrecio;
-      refrescarTareasTabla();
+    if (nuevoCompIdx === compIdx) {
+      // Mismo componente: actualizar en lugar
+      componentesData[compIdx].tareas[tareaIdx].nombre = nuevoNombre;
+      componentesData[compIdx].tareas[tareaIdx].precioUnitario = nuevoPrecio;
+    } else {
+      // Cambio de componente: mover la tarea
+      var tareaMovida = componentesData[compIdx].tareas.splice(tareaIdx, 1)[0];
+      tareaMovida.nombre = nuevoNombre;
+      tareaMovida.precioUnitario = nuevoPrecio;
+      componentesData[nuevoCompIdx].tareas.push(tareaMovida);
     }
+    refrescarTareasCards();
     cerrar();
   };
 
@@ -775,12 +941,16 @@ function abrirModalEditarTarea(idx) {
   document.addEventListener("keydown", escHandler);
 }
 
-function abrirModalAgregarTarea(idx) {
+function abrirModalAgregarTarea(compIdx, tareaIdx) {
   var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "modal-nc-agregar-tarea-titulo");
+
+  var compOpts = componentesData.map(function (c, ci) {
+    return '<option value="' + ci + '"' + (ci === compIdx ? ' selected' : '') + '>' + escaparHTML(c.nombre) + '</option>';
+  }).join("");
 
   overlay.innerHTML =
     '<div class="modal modal--sm modal-edit">' +
@@ -793,6 +963,10 @@ function abrirModalAgregarTarea(idx) {
     '<label for="input-nc-agregar-tarea-nombre" class="form-label">Nombre de la tarea</label>' +
     '<input type="text" id="input-nc-agregar-tarea-nombre" class="form-input" placeholder="Ej: Costura, Corte" maxlength="60" required autocomplete="off" />' +
     '<p id="error-nc-agregar-tarea-nombre" class="form-error" hidden></p>' +
+    '</div>' +
+    '<div class="form-group">' +
+    '<label for="input-nc-agregar-tarea-componente" class="form-label">Componente</label>' +
+    '<select id="input-nc-agregar-tarea-componente" class="form-select">' + compOpts + '</select>' +
     '</div>' +
     '<div class="form-group">' +
     '<label for="input-nc-agregar-tarea-precio" class="form-label">Precio (ctv)</label>' +
@@ -863,9 +1037,17 @@ function abrirModalAgregarTarea(idx) {
       inputPrecio.focus();
       return;
     }
-    var nombreDuplicado = tareasData.some(function (t) {
-      return t.nombre.trim().toLowerCase() === nombre.toLowerCase();
-    });
+
+    // Verificar nombre duplicado en todas las tareas de todos los componentes
+    var nombreDuplicado = false;
+    for (var ci = 0; ci < componentesData.length; ci++) {
+      if (componentesData[ci].tareas.some(function (t) {
+        return t.nombre.trim().toLowerCase() === nombre.toLowerCase();
+      })) {
+        nombreDuplicado = true;
+        break;
+      }
+    }
     if (nombreDuplicado) {
       errorNombre.textContent = "Ya existe una tarea con ese nombre";
       errorNombre.hidden = false;
@@ -874,9 +1056,12 @@ function abrirModalAgregarTarea(idx) {
       return;
     }
 
-    tareasData.splice(idx + 1, 0, { nombre: nombre, precioUnitario: precio });
-    refrescarTareasTabla();
-    seleccionarFilaTarea(idx + 1);
+    var compSel = overlay.querySelector("#input-nc-agregar-tarea-componente");
+    var nuevoCompIdx = parseInt(compSel.value);
+
+    componentesData[nuevoCompIdx].tareas.splice(tareaIdx + 1, 0, { nombre: nombre, precioUnitario: precio });
+    refrescarTareasCards();
+    seleccionarFilaTarea(nuevoCompIdx, tareaIdx + 1);
     mostrarToast("Tarea agregada", "success");
     cerrar();
   };
@@ -970,7 +1155,7 @@ function abrirModalNuevaPrenda() {
         return;
       }
 
-      var nuevaId = await db.prendas.add({ nombre: nombre, tareas: [] });
+      var nuevaId = await db.prendas.add({ nombre: nombre, componentes: [] });
       cerrar();
       mostrarToast("Prenda creada", "success");
 
@@ -1020,7 +1205,7 @@ function abrirModalNuevaPrenda() {
 // ============================================================
 // PERSISTIR EN DB - Guardar corte con todos sus datos
 // Valida todos los campos requeridos, construye el objeto corte
-// con tareas embebidas (id, unidadesTotales, asignaciones vacias)
+// con componentes y tareas embebidas con IDs secuenciales,
 // y navega de vuelta a la lista de cortes.
 // ============================================================
 
@@ -1068,7 +1253,35 @@ async function guardarCorte() {
     document.getElementById("input-talla-nombre").focus();
     return;
   }
+  // Verificar que haya al menos una tarea en algun componente
+  var totalTareas = 0;
+  for (var ci = 0; ci < componentesData.length; ci++) {
+    totalTareas += componentesData[ci].tareas.length;
+  }
+  if (totalTareas === 0) {
+    mostrarToast("Agrega al menos una tarea", "warning");
+    var primerInput = document.querySelector(".componente-add-nombre");
+    if (primerInput) primerInput.focus();
+    return;
+  }
   var cantidadPrendas = tallasData.reduce(function (s, t) { return s + t.cantidad; }, 0);
+
+  // Generar IDs secuenciales globales para todas las tareas
+  var idGlobal = 1;
+  var componentesParaGuardar = componentesData.map(function (comp) {
+    return {
+      nombre: comp.nombre,
+      tareas: comp.tareas.map(function (t) {
+        return {
+          id: idGlobal++,
+          nombre: t.nombre,
+          precioUnitario: t.precioUnitario || 0,
+          unidadesTotales: cantidadPrendas,
+          asignaciones: []
+        };
+      })
+    };
+  });
 
   try {
     await db.cortes.add({
@@ -1080,15 +1293,7 @@ async function guardarCorte() {
       precioVentaUnitario: precioVentaUnitario,
       prendaId: prendaId,
       tallas: tallasData.map(function (t) { return { talla: t.talla, cantidad: t.cantidad }; }),
-      tareas: tareasData.map(function (t, i) {
-        return {
-          id: i + 1,
-          nombre: t.nombre,
-          precioUnitario: t.precioUnitario,
-          unidadesTotales: cantidadPrendas,
-          asignaciones: []
-        };
-      })
+      componentes: componentesParaGuardar
     });
 
     mostrarToast("Corte creado exitosamente", "success");

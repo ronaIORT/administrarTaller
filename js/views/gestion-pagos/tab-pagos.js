@@ -13,7 +13,7 @@
 //     siempre permanecen visibles aunque pendiente = 0.
 // ============================================================
 
-import { escaparHTML, formatBs } from "../../utils.js";
+import { escaparHTML, formatBs, iterarTareasCorte } from "../../utils.js";
 import { mostrarToast, estadoVacioHTML } from "../shared.js";
 import { abrirModalPagoShared } from "../shared-pagos.js";
 
@@ -146,7 +146,7 @@ function poblarSelectCortes(cortes, pagos) {
 // Helper: pendiente (positivo=adeudo, negativo=excedente, 0=pagado) de un corte completo.
 function calcularPendienteCorte(corte, pagos) {
   var earnedCtv = 0;
-  (corte.tareas || []).forEach(function (t) {
+  iterarTareasCorte(corte, function (t) {
     (t.asignaciones || []).forEach(function (a) {
       earnedCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
     });
@@ -188,8 +188,7 @@ function calcularDatos(trabajadoresMap, cortes, pagos) {
     // Ganado en centavos para los cortes filtrados
     var earnedCtv = 0;
     cortesFiltrados.forEach(function (corte) {
-      if (!corte.tareas) return;
-      corte.tareas.forEach(function (tarea) {
+      iterarTareasCorte(corte, function (tarea) {
         if (!tarea.asignaciones) return;
         tarea.asignaciones.forEach(function (asig) {
           if (asig.trabajadorId === trabajadorId) {

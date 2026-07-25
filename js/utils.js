@@ -89,4 +89,27 @@ function formatNumero(n) {
   return new Intl.NumberFormat("es-BO").format(n);
 }
 
-export { escaparHTML, centavosABolivianos, bolivianosACentavos, formatBs, formatBsCtv, formatCtv, formatCostoTotal, formatNumero };
+const COMPONENTE_DEFAULT = "General";
+
+/**
+ * Itera las tareas de un corte soportando formato moderno
+ * (corte.componentes[].tareas[]) y legacy (corte.tareas[]).
+ * @param {Object} corte
+ * @param {Function} callback - Recibe la tarea en cada iteracion
+ */
+function iterarTareasCorte(corte, callback) {
+  var tieneComponentes = corte.componentes && corte.componentes.length > 0;
+  if (tieneComponentes) {
+    corte.componentes.forEach(function (comp) {
+      (comp.tareas || []).forEach(function (t) {
+        callback(t);
+      });
+    });
+  } else if (corte.tareas) {
+    corte.tareas.forEach(function (t) {
+      callback(t);
+    });
+  }
+}
+
+export { escaparHTML, centavosABolivianos, bolivianosACentavos, formatBs, formatBsCtv, formatCtv, formatCostoTotal, formatNumero, COMPONENTE_DEFAULT, iterarTareasCorte };

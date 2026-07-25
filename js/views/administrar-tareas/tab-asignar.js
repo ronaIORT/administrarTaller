@@ -1,9 +1,9 @@
 // ============================================================
 // TAB ASIGNAR - Formulario de asignacion de tareas a trabajadores
-// Permite seleccionar trabajador y tarea, ingresar cantidades
-// por talla (con toggle click 0/max), crear nuevas tareas
-// inline on-the-fly, y ver el historial de asignaciones
-// agrupado por trabajador+tarea con eliminacion masiva.
+// Permite seleccionar trabajador y tarea (de cualquier componente),
+// ingresar cantidades por talla (con toggle click 0/max), crear
+// nuevas tareas inline on-the-fly, y ver el historial de
+// asignaciones agrupado por trabajador+tarea con eliminacion masiva.
 // Si el corte esta finalizado, bloquea nuevas asignaciones.
 // ============================================================
 
@@ -16,19 +16,22 @@ import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
 // ============================================================
 
 /** ID del contenedor de FABs para historial */
-const ASIGNAR_FAB_CONTAINER_ID = "at-asignar-fab-container";
+var ASIGNAR_FAB_CONTAINER_ID = "at-asignar-fab-container";
 
-/** Datos de la fila de historial seleccionada { trabajadorId, tareaIdx } */
-let historialSeleccionado = null;
+/** Datos de la fila de historial seleccionada { trabajadorId, componenteIdx, tareaIdx } */
+var historialSeleccionado = null;
 
 /** Timeout para ocultar FABs con animacion */
-let ocultarAsignarFABsTimeout = null;
+var ocultarAsignarFABsTimeout = null;
 
 /** AbortController para limpiar listener de click-outside */
-let outsideClickAbortControllerAT = null;
+var outsideClickAbortControllerAT = null;
 
 /** Precio unitario de la tarea actualmente seleccionada (en centavos) */
-let precioActualCtv = 0;
+var precioActualCtv = 0;
+
+/** Filtro de componente activo para el select de tareas ("__todas" o nombre de componente) */
+var componenteFiltroAsignar = "__todas";
 
 // ============================================================
 // HELPERS DE DISPONIBILIDAD
@@ -36,24 +39,62 @@ let precioActualCtv = 0;
 
 /**
  * Devuelve las tareas que aun tienen al menos una talla con unidades
- * disponibles (global, sin importar trabajador). Se usa para poblar
- * el select de tareas: solo tareas que no estan completamente asignadas.
- * @param {Object} corte - Corte con array tallas[] y tareas[]
- * @returns {Array} - Tareas con capacidad restante
+ * disponibles (global, sin importar trabajador). Itera los componentes
+ * y sus tareas anidadas. Se usa para poblar el select de tareas:
+ * solo tareas que no estan completamente asignadas.
+ * @param {Object} corte - Corte con array tallas[] y componentes[]
+ * @returns {Array} - [{ tarea, componenteIdx, tareaIdx, compNombre }]
  */
-function getTareasDisponibles(corte) {
-  return (corte.tareas || []).filter(function (tarea) {
-    let asignadas = {};
-    (tarea.asignaciones || []).forEach(function (a) {
-      if (a.talla) {
-        asignadas[a.talla] = (asignadas[a.talla] || 0) + (a.cantidad || 0);
+function getTareasDisponibles(corte, compFiltro) {
+  var result = [];
+  (corte.componentes || []).forEach(function (comp, componenteIdx) {
+    if (compFiltro && compFiltro !== "__todas" && comp.nombre !== compFiltro) return;
+    (comp.tareas || []).forEach(function (tarea, tareaIdx) {
+      var asignadas = {};
+      (tarea.asignaciones || []).forEach(function (a) {
+        if (a.talla) {
+          asignadas[a.talla] = (asignadas[a.talla] || 0) + (a.cantidad || 0);
+        }
+      });
+      var hayDisponible = (corte.tallas || []).some(function (t) {
+        var restante = t.cantidad - (asignadas[t.talla] || 0);
+        return restante > 0;
+      });
+      if (hayDisponible) {
+        result.push({
+          tarea: tarea,
+          componenteIdx: componenteIdx,
+          tareaIdx: tareaIdx,
+          compNombre: comp.nombre,
+        });
       }
     });
-    return (corte.tallas || []).some(function (t) {
-      let restante = t.cantidad - (asignadas[t.talla] || 0);
-      return restante > 0;
-    });
   });
+  return result;
+}
+
+/**
+ * Reconstruye el select de tareas segun el filtro de componente activo.
+ * Limpia la seleccion y oculta los campos dinamicos.
+ * @param {Object} corte
+ */
+function rebuildTareaSelectOptions(corte) {
+  var select = document.getElementById("select-asignar-tarea");
+  if (!select) return;
+  var lista = getTareasDisponibles(corte, componenteFiltroAsignar);
+  select.innerHTML =
+    '<option value="">Seleccionar tarea...</option>' +
+    '<option value="__nueva__">＋ Crear nueva tarea</option>' +
+    lista.map(function (item) {
+      return '<option value="' + item.componenteIdx + "-" + item.tareaIdx + '">' +
+        escaparHTML(item.tarea.nombre || "Sin nombre") +
+        " (" + escaparHTML(item.compNombre) + ")" +
+        "</option>";
+    }).join("");
+  select.value = "";
+  ocultarCamposAsignacion();
+  var btn = document.getElementById("btn-submit-asignacion");
+  if (btn) btn.disabled = true;
 }
 
 /**
@@ -65,67 +106,70 @@ function getTareasDisponibles(corte) {
  * @returns {Object} - Mapa { nombreTalla: cantidadDisponible }
  */
 function getTallasDisponiblesParaTarea(corte, tarea) {
-  let asignadas = {};
+  var asignadas = {};
   (tarea.asignaciones || []).forEach(function (a) {
     if (a.talla) {
       asignadas[a.talla] = (asignadas[a.talla] || 0) + (a.cantidad || 0);
     }
   });
-  let disponibles = {};
+  var disponibles = {};
   (corte.tallas || []).forEach(function (t) {
     disponibles[t.talla] = Math.max(0, t.cantidad - (asignadas[t.talla] || 0));
   });
   return disponibles;
 }
 
-
-
 /**
- * Agrupa las asignaciones del corte por (trabajadorId, indiceTarea)
+ * Agrupa las asignaciones del corte por (trabajadorId, componenteIdx, tareaIdx)
  * para mostrar en el historial con el formato: M(5), L(3).
- * @param {Object} corte - Corte con array tareas[]
+ * Itera los componentes y sus tareas anidadas.
+ * @param {Object} corte - Corte con array componentes[]
  * @param {Object} trabajadoresMap - Mapa id -> nombre
- * @returns {Array} - Grupos [{ trabajadorId, tareaIdx, trabajadorNombre, tareaNombre, tallasStr }]
+ * @returns {Array} - Grupos [{ trabajadorId, componenteIdx, tareaIdx, trabajadorNombre, tareaNombre, compNombre, tallasStr }]
  */
 function agruparAsignacionesPorTrabajador(corte, trabajadoresMap) {
-  let grupos = [];
+  var grupos = [];
 
-  (corte.tareas || []).forEach(function (tarea, tareaIdx) {
-    let porTrabajador = {};
-    (tarea.asignaciones || []).forEach(function (a) {
-      let key = a.trabajadorId;
-      if (!porTrabajador[key]) {
-        porTrabajador[key] = [];
-      }
-      porTrabajador[key].push(a);
-    });
+  (corte.componentes || []).forEach(function (comp, componenteIdx) {
+    (comp.tareas || []).forEach(function (tarea, tareaIdx) {
+      var porTrabajador = {};
+      (tarea.asignaciones || []).forEach(function (a) {
+        var key = a.trabajadorId;
+        if (!porTrabajador[key]) {
+          porTrabajador[key] = [];
+        }
+        porTrabajador[key].push(a);
+      });
 
-    Object.keys(porTrabajador).forEach(function (tId) {
-      let trabajadorId = parseInt(tId, 10);
-      let asignaciones = porTrabajador[tId];
+      Object.keys(porTrabajador).forEach(function (tId) {
+        var trabajadorId = parseInt(tId, 10);
+        var asignaciones = porTrabajador[tId];
 
-      let tallasStr = asignaciones
-        .map(function (a) {
-          if (a.talla) {
-            return '<span class="at-asignar__historial-talla">' + escaparHTML(a.talla) + ' (' + a.cantidad + ')</span>';
-          }
-          return '<span class="at-asignar__historial-talla">x' + a.cantidad + '</span>';
-        })
-        .join("");
+        var tallasStr = asignaciones
+          .map(function (a) {
+            if (a.talla) {
+              return '<span class="at-asignar__historial-talla">' + escaparHTML(a.talla) + ' (' + a.cantidad + ')</span>';
+            }
+            return '<span class="at-asignar__historial-talla">x' + a.cantidad + '</span>';
+          })
+          .join("");
 
-      // Fecha mas reciente entre todas las asignaciones del grupo
-      let fechaMasReciente = asignaciones.reduce(function (max, a) {
-        return (a.fecha || "") > max ? a.fecha : max;
-      }, "");
+        // Fecha mas reciente entre todas las asignaciones del grupo
+        var fechaMasReciente = asignaciones.reduce(function (max, a) {
+          return (a.fecha || "") > max ? a.fecha : max;
+        }, "");
 
-      grupos.push({
-        trabajadorId: trabajadorId,
-        trabajadorNombre:
-          trabajadoresMap[trabajadorId] || "Trab. " + trabajadorId,
-        tareaIdx: tareaIdx,
-        tareaNombre: tarea.nombre || "Sin nombre",
-        tallasStr: tallasStr,
-        fechaMasReciente: fechaMasReciente,
+        grupos.push({
+          trabajadorId: trabajadorId,
+          trabajadorNombre:
+            trabajadoresMap[trabajadorId] || "Trab. " + trabajadorId,
+          componenteIdx: componenteIdx,
+          tareaIdx: tareaIdx,
+          tareaNombre: tarea.nombre || "Sin nombre",
+          compNombre: comp.nombre,
+          tallasStr: tallasStr,
+          fechaMasReciente: fechaMasReciente,
+        });
       });
     });
   });
@@ -151,7 +195,7 @@ function agruparAsignacionesPorTrabajador(corte, trabajadoresMap) {
  */
 function renderizarHTMLTallasModoCrear(corte) {
   // Solo mostrar tallas que tengan cantidad > 0 en el corte
-  let tallasVisibles = (corte.tallas || []).filter(function (t) {
+  var tallasVisibles = (corte.tallas || []).filter(function (t) {
     return t.cantidad > 0;
   });
 
@@ -175,7 +219,7 @@ function renderizarHTMLTallasModoCrear(corte) {
     '<div class="at-asignar__tallas-grid">' +
     tallasVisibles
       .map(function (talla) {
-        let nombreEscapado = escaparHTML(talla.talla);
+        var nombreEscapado = escaparHTML(talla.talla);
         return (
           '<div class="at-asignar__talla-fila">' +
           '<button type="button" class="at-asignar__talla-label" data-talla="' +
@@ -214,7 +258,7 @@ function renderizarHTMLTallasModoCrear(corte) {
  */
 function renderizarHTMLTallasModoExistente(corte, disponibles) {
   // Solo mostrar tallas que tengan cantidad disponible > 0
-  let tallasVisibles = (corte.tallas || []).filter(function (t) {
+  var tallasVisibles = (corte.tallas || []).filter(function (t) {
     return (disponibles[t.talla] || 0) > 0;
   });
 
@@ -239,8 +283,8 @@ function renderizarHTMLTallasModoExistente(corte, disponibles) {
     '<div class="at-asignar__tallas-grid">' +
     tallasVisibles
       .map(function (talla) {
-        let nombreEscapado = escaparHTML(talla.talla);
-        let disponible = disponibles[talla.talla] || 0;
+        var nombreEscapado = escaparHTML(talla.talla);
+        var disponible = disponibles[talla.talla] || 0;
         return (
           '<div class="at-asignar__talla-fila">' +
           '<button type="button" class="at-asignar__talla-label" data-talla="' +
@@ -298,13 +342,15 @@ function renderizarHTMLCantidadGlobal(maxDisponible) {
  * Se llama al cambiar de trabajador o al resetear seleccion.
  */
 function ocultarCamposAsignacion() {
-  let grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
-  let grupoPrecio = document.getElementById("grupo-precio-asignar");
-  let tallasContainer = document.getElementById("asignar-tallas-container");
-  let errorEl = document.getElementById("error-asignacion");
+  var grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
+  var grupoPrecio = document.getElementById("grupo-precio-asignar");
+  var grupoComponente = document.getElementById("grupo-componente-asignar");
+  var tallasContainer = document.getElementById("asignar-tallas-container");
+  var errorEl = document.getElementById("error-asignacion");
 
   if (grupoNombre) grupoNombre.style.display = "none";
   if (grupoPrecio) grupoPrecio.style.display = "none";
+  if (grupoComponente) grupoComponente.style.display = "none";
   if (tallasContainer) tallasContainer.innerHTML = "";
   if (errorEl) errorEl.hidden = true;
   precioActualCtv = 0;
@@ -315,15 +361,16 @@ function ocultarCamposAsignacion() {
  * segun los selects de trabajador y tarea.
  * Si ambos selects tienen valor, muestra los campos correspondientes.
  * Si falta alguno, oculta todo y resetea el boton submit.
+ * El select de tarea usa valores compuestos "compIdx-tareaIdx".
  */
 function actualizarCamposAsignacion(corte) {
-  let selectTrabajador = document.getElementById("select-asignar-trabajador");
-  let selectTarea = document.getElementById("select-asignar-tarea");
-  let btnSubmit = document.getElementById("btn-submit-asignacion");
+  var selectTrabajador = document.getElementById("select-asignar-trabajador");
+  var selectTarea = document.getElementById("select-asignar-tarea");
+  var btnSubmit = document.getElementById("btn-submit-asignacion");
 
-  let trabajadorId = selectTrabajador && selectTrabajador.value
+  var trabajadorId = selectTrabajador && selectTrabajador.value
     ? parseInt(selectTrabajador.value, 10) : null;
-  let tareaValue = selectTarea ? selectTarea.value : "";
+  var tareaValue = selectTarea ? selectTarea.value : "";
 
   if (!trabajadorId || !tareaValue) {
     ocultarCamposAsignacion();
@@ -336,27 +383,32 @@ function actualizarCamposAsignacion(corte) {
   if (tareaValue === "__nueva__") {
     modoCrearInine(corte, trabajadorId);
   } else {
-    let tareaId = parseInt(tareaValue, 10);
-    let tarea = (corte.tareas || []).find(function (t) {
-      return t.id === tareaId;
-    });
-    if (tarea) {
-      modoExistente(corte, tarea, trabajadorId);
+    // Parsear valor compuesto "compIdx-tareaIdx"
+    var partes = tareaValue.split("-");
+    var componenteIdx = parseInt(partes[0], 10);
+    var tareaIdx = parseInt(partes[1], 10);
+    var comp = (corte.componentes || [])[componenteIdx];
+    if (comp) {
+      var tarea = (comp.tareas || [])[tareaIdx];
+      if (tarea) {
+        modoExistente(corte, tarea, trabajadorId);
+      }
     }
   }
 }
 
 /**
  * Configura el modo "crear nueva tarea" inline.
- * Muestra input de nombre, precio vacio, y tallas con max del corte.
+ * Muestra select de componente, input de nombre, precio vacio,
+ * y tallas con max del corte.
  * @param {Object} corte
  * @param {number} trabajadorId - ID del trabajador seleccionado
  */
 function modoCrearInine(corte, trabajadorId) {
   precioActualCtv = 0;
 
-  let grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
-  let inputNombre = document.getElementById("input-asignar-nombre-tarea");
+  var grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
+  var inputNombre = document.getElementById("input-asignar-nombre-tarea");
   grupoNombre.style.display = "";
   inputNombre.value = "";
   inputNombre.focus();
@@ -370,13 +422,25 @@ function modoCrearInine(corte, trabajadorId) {
   });
 
   // Mostrar input de precio (vacio)
-  let grupoPrecio = document.getElementById("grupo-precio-asignar");
-  let inputPrecio = document.getElementById("input-asignar-precio");
+  var grupoPrecio = document.getElementById("grupo-precio-asignar");
+  var inputPrecio = document.getElementById("input-asignar-precio");
   grupoPrecio.style.display = "";
   inputPrecio.value = "";
 
+  // Mostrar select de componente o pre-seleccionar si hay filtro activo
+  var grupoComponente = document.getElementById("grupo-componente-asignar");
+  var compSelect = document.getElementById("input-asignar-componente");
+  if (grupoComponente && compSelect) {
+    if (componenteFiltroAsignar !== "__todas") {
+      compSelect.value = componenteFiltroAsignar;
+      grupoComponente.style.display = "none";
+    } else {
+      grupoComponente.style.display = "";
+    }
+  }
+
   // Renderizar tallas o cantidad global
-  let tallasContainer = document.getElementById("asignar-tallas-container");
+  var tallasContainer = document.getElementById("asignar-tallas-container");
   if (corte.tallas && corte.tallas.length > 0) {
     tallasContainer.innerHTML = renderizarHTMLTallasModoCrear(corte);
     configurarToggleTallas();
@@ -391,31 +455,34 @@ function modoCrearInine(corte, trabajadorId) {
 
 /**
  * Configura el modo "tarea existente".
- * Oculta nombre, muestra precio pre-rellenado, tallas con disponibles.
+ * Oculta nombre y componente, muestra precio pre-rellenado, tallas con disponibles.
  * @param {Object} corte
  * @param {Object} tarea - La tarea seleccionada
  * @param {number} trabajadorId - ID del trabajador seleccionado
  */
 function modoExistente(corte, tarea, trabajadorId) {
-  let grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
+  var grupoNombre = document.getElementById("grupo-nombre-tarea-asignar");
   grupoNombre.style.display = "none";
 
-  let grupoPrecio = document.getElementById("grupo-precio-asignar");
-  let inputPrecio = document.getElementById("input-asignar-precio");
+  var grupoComponente = document.getElementById("grupo-componente-asignar");
+  if (grupoComponente) grupoComponente.style.display = "none";
+
+  var grupoPrecio = document.getElementById("grupo-precio-asignar");
+  var inputPrecio = document.getElementById("input-asignar-precio");
   grupoPrecio.style.display = "";
   inputPrecio.value = tarea.precioUnitario || 0;
   precioActualCtv = tarea.precioUnitario || 0;
 
-  let tallasContainer = document.getElementById("asignar-tallas-container");
+  var tallasContainer = document.getElementById("asignar-tallas-container");
   if (corte.tallas && corte.tallas.length > 0) {
-    let disponibles = getTallasDisponiblesParaTarea(corte, tarea);
+    var disponibles = getTallasDisponiblesParaTarea(corte, tarea);
     tallasContainer.innerHTML = renderizarHTMLTallasModoExistente(corte, disponibles);
     configurarToggleTallas();
   } else {
-    let asignadasGlobal = (tarea.asignaciones || []).reduce(function (s, a) {
+    var asignadasGlobal = (tarea.asignaciones || []).reduce(function (s, a) {
       return s + (a.cantidad || 0);
     }, 0);
-    let totalDisponible = Math.max(0, (tarea.unidadesTotales || 0) - asignadasGlobal);
+    var totalDisponible = Math.max(0, (tarea.unidadesTotales || 0) - asignadasGlobal);
     tallasContainer.innerHTML = renderizarHTMLCantidadGlobal(totalDisponible);
   }
 
@@ -449,16 +516,16 @@ function actualizarContadorTallas() {
  * Tambien registra listeners de input para actualizar el contador.
  */
 function configurarToggleTallas() {
-  let labels = document.querySelectorAll(".at-asignar__talla-label");
+  var labels = document.querySelectorAll(".at-asignar__talla-label");
   labels.forEach(function (label) {
     label.addEventListener("click", function () {
-      let max = parseInt(label.dataset.max, 10) || 0;
-      let tallaNombre = label.dataset.talla;
-      let inputId = "input-talla-" + tallaNombre.replace(/\s+/g, "-");
-      let input = document.getElementById(inputId);
+      var max = parseInt(label.dataset.max, 10) || 0;
+      var tallaNombre = label.dataset.talla;
+      var inputId = "input-talla-" + tallaNombre.replace(/\s+/g, "-");
+      var input = document.getElementById(inputId);
       if (!input) return;
 
-      let currentVal = parseInt(input.value, 10) || 0;
+      var currentVal = parseInt(input.value, 10) || 0;
       if (currentVal === 0 && max > 0) {
         input.value = max;
         label.classList.add("at-asignar__talla-label--filled");
@@ -470,16 +537,16 @@ function configurarToggleTallas() {
     });
   });
 
-  let inputs = document.querySelectorAll(".at-asignar__talla-input");
+  var inputs = document.querySelectorAll(".at-asignar__talla-input");
   inputs.forEach(function (input) {
     input.addEventListener("input", function () {
-      let tallaNombre = this.id.replace("input-talla-", "").replace(/-/g, " ");
-      let labelBtn = document.querySelector(
+      var tallaNombre = this.id.replace("input-talla-", "").replace(/-/g, " ");
+      var labelBtn = document.querySelector(
         '.at-asignar__talla-label[data-talla="' + tallaNombre + '"]',
       );
       if (labelBtn) {
-        let val = parseInt(this.value, 10) || 0;
-        let max = parseInt(labelBtn.dataset.max, 10) || 0;
+        var val = parseInt(this.value, 10) || 0;
+        var max = parseInt(labelBtn.dataset.max, 10) || 0;
 
         if (val > max && max > 0) {
           mostrarToast(
@@ -505,8 +572,8 @@ function configurarToggleTallas() {
 // ============================================================
 
 export function renderTabAsignar(corte, container, opciones) {
-  let trabajadoresMap = opciones.trabajadoresMap;
-  let onDataChange = opciones.onDataChange;
+  var trabajadoresMap = opciones.trabajadoresMap;
+  var onDataChange = opciones.onDataChange;
 
   // Limpiar estado y listeners previos
   document.getElementById(ASIGNAR_FAB_CONTAINER_ID)?.remove();
@@ -519,11 +586,12 @@ export function renderTabAsignar(corte, container, opciones) {
     clearTimeout(ocultarAsignarFABsTimeout);
     ocultarAsignarFABsTimeout = null;
   }
+  componenteFiltroAsignar = "__todas";
 
-  let esTerminado = corte.estado === "terminado";
+  var esTerminado = corte.estado === "terminado";
 
   // Opciones del select de trabajador
-  let opcionesTrabajadores =
+  var opcionesTrabajadores =
     '<option value="">Seleccionar trabajador...</option>' +
     Object.entries(trabajadoresMap)
       .map(function (entry) {
@@ -537,24 +605,47 @@ export function renderTabAsignar(corte, container, opciones) {
       })
       .join("");
 
-  // Opciones iniciales del select de tarea (solo tareas disponibles globalmente)
-  let opcionesTareas =
+  // Opciones del select de tarea — filtra por componente activo
+  // Cada option tiene valor compuesto "compIdx-tareaIdx"
+  var tareasDisponibles = getTareasDisponibles(corte, componenteFiltroAsignar);
+  var opcionesTareas =
     '<option value="">Seleccionar tarea...</option>' +
     '<option value="__nueva__">＋ Crear nueva tarea</option>' +
-    getTareasDisponibles(corte)
-      .map(function (tarea) {
+    tareasDisponibles
+      .map(function (item) {
         return (
           '<option value="' +
-          tarea.id +
+          item.componenteIdx +
+          "-" +
+          item.tareaIdx +
           '">' +
-          escaparHTML(tarea.nombre || "Sin nombre") +
+          escaparHTML(item.tarea.nombre || "Sin nombre") +
+          " (" + escaparHTML(item.compNombre) + ")" +
           "</option>"
         );
       })
       .join("");
 
+  // Filter-chips de componente
+  var compsNombres = (corte.componentes || []).map(function (c) { return c.nombre; });
+  var compsData = compsNombres.length > 0 ? compsNombres : [];
+  var componenteChipsHTML = '<button class="filter-chip' + (componenteFiltroAsignar === "__todas" ? " active" : "") + '" data-componente="__todas">Todas</button>';
+  compsData.forEach(function (c) {
+    var activo = componenteFiltroAsignar === c ? " active" : "";
+    componenteChipsHTML += '<button class="filter-chip' + activo + '" data-componente="' + escaparHTML(c) + '">' + escaparHTML(c) + '</button>';
+  });
+
   // Construir historial agrupado
-  let historialHTML = construirHistorialHTML(corte, trabajadoresMap);
+  var historialHTML = construirHistorialHTML(corte, trabajadoresMap);
+
+  // Opciones del select de componente para modo crear
+  var opcionesComponente =
+    '<option value="">Seleccionar componente...</option>' +
+    ((corte.componentes || []).length > 0
+      ? (corte.componentes || []).map(function (c) {
+          return '<option value="' + escaparHTML(c.nombre) + '">' + escaparHTML(c.nombre) + '</option>';
+        }).join("")
+      : '<option value="General">General</option>');
 
   container.innerHTML =
     '<section class="at-asignar">' +
@@ -575,6 +666,8 @@ export function renderTabAsignar(corte, container, opciones) {
     opcionesTrabajadores +
     "</select>" +
     "</div>" +
+    // Filtro por componente
+    '<div class="filter-chips" id="asignar-componente-filter-chips">' + componenteChipsHTML + '</div>' +
     // Select tarea + boton rapido
     '<div class="at-asignar__form-row">' +
     '<select id="select-asignar-tarea" class="form-select" ' +
@@ -593,6 +686,14 @@ export function renderTabAsignar(corte, container, opciones) {
     '<label for="input-asignar-nombre-tarea" class="form-label">Nombre de la tarea</label>' +
     '<input type="text" id="input-asignar-nombre-tarea" class="form-input" placeholder="Ej: Bordado, Etiquetas" maxlength="60" autocomplete="off" />' +
     '<p id="error-asignar-nombre" class="form-error" hidden></p>' +
+    "</div>" +
+    // Select de componente para nueva tarea (oculto, solo en modo crear)
+    '<div class="form-group" id="grupo-componente-asignar" style="display:none">' +
+    '<label for="input-asignar-componente" class="form-label">Componente</label>' +
+    '<select id="input-asignar-componente" class="form-select">' +
+    opcionesComponente +
+    "</select>" +
+    '<p id="error-asignar-componente" class="form-error" hidden></p>' +
     "</div>" +
     // Input de precio (oculto hasta elegir tarea)
     '<div class="form-group" id="grupo-precio-asignar" style="display:none">' +
@@ -631,6 +732,16 @@ export function renderTabAsignar(corte, container, opciones) {
         actualizarCamposAsignacion(corte);
       });
 
+    // Filtro por componente: actualizar las opciones del select de tarea
+    document.getElementById("asignar-componente-filter-chips").addEventListener("click", function (e) {
+      var chip = e.target.closest(".filter-chip");
+      if (!chip) return;
+      componenteFiltroAsignar = chip.dataset.componente;
+      this.querySelectorAll(".filter-chip").forEach(function (c) { c.classList.remove("active"); });
+      chip.classList.add("active");
+      rebuildTareaSelectOptions(corte);
+    });
+
     // Input precio: sincronizar precioActualCtv y actualizar contador
     document
       .getElementById("input-asignar-precio")
@@ -643,8 +754,8 @@ export function renderTabAsignar(corte, container, opciones) {
     document
       .getElementById("btn-nueva-tarea-asignar")
       .addEventListener("click", function () {
-        let selectTarea = document.getElementById("select-asignar-tarea");
-        let selectTrabajador = document.getElementById(
+        var selectTarea = document.getElementById("select-asignar-tarea");
+        var selectTrabajador = document.getElementById(
           "select-asignar-trabajador",
         );
 
@@ -666,22 +777,23 @@ export function renderTabAsignar(corte, container, opciones) {
   }
 
   // Delegacion de clicks en el historial (seleccion + eliminar inline)
-  let historialContainer = document.getElementById("at-asignar-historial");
+  var historialContainer = document.getElementById("at-asignar-historial");
   if (historialContainer) {
     historialContainer.addEventListener("click", function (e) {
       // Boton eliminar inline (prioridad sobre seleccion de fila)
-      let deleteBtn = e.target.closest(".at-asignar__historial-delete");
+      var deleteBtn = e.target.closest(".at-asignar__historial-delete");
       if (deleteBtn) {
-        let sel = {
+        var sel = {
           trabajadorId: parseInt(deleteBtn.dataset.trabajadorId, 10),
-          tareaIdx: parseInt(deleteBtn.dataset.tareaIdx, 10),
+          componenteIdx: parseInt(deleteBtn.dataset.componente, 10),
+          tareaIdx: parseInt(deleteBtn.dataset.tarea, 10),
         };
         confirmarEliminarAsignacion(corte, sel, onDataChange);
         return;
       }
 
       // Seleccion de fila para FAB (mobile)
-      let row = e.target.closest(".at-asignar__historial-row");
+      var row = e.target.closest(".at-asignar__historial-row");
       if (row) {
         seleccionarHistorial(row, corte, onDataChange);
       }
@@ -697,7 +809,7 @@ export function renderTabAsignar(corte, container, opciones) {
 // ============================================================
 
 function construirHistorialHTML(corte, trabajadoresMap) {
-  let grupos = agruparAsignacionesPorTrabajador(corte, trabajadoresMap);
+  var grupos = agruparAsignacionesPorTrabajador(corte, trabajadoresMap);
 
   if (grupos.length === 0) {
     return '<p style="color:var(--color-text-muted);font-size:var(--font-size-sm);padding:var(--space-4) 0;text-align:center;">Sin asignaciones registradas</p>';
@@ -716,7 +828,9 @@ function construirHistorialHTML(corte, trabajadoresMap) {
         return (
           '<div class="at-asignar__historial-row" data-trabajador-id="' +
           g.trabajadorId +
-          '" data-tarea-idx="' +
+          '" data-componente="' +
+          g.componenteIdx +
+          '" data-tarea="' +
           g.tareaIdx +
           '" data-idx="' +
           idx +
@@ -732,7 +846,9 @@ function construirHistorialHTML(corte, trabajadoresMap) {
           '</div>' +
           '<button type="button" class="at-asignar__historial-delete" data-trabajador-id="' +
           g.trabajadorId +
-          '" data-tarea-idx="' +
+          '" data-componente="' +
+          g.componenteIdx +
+          '" data-tarea="' +
           g.tareaIdx +
           '" aria-label="Eliminar asignaciones del trabajador" title="Eliminar asignaciones">' +
           '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
@@ -751,7 +867,7 @@ function construirHistorialHTML(corte, trabajadoresMap) {
 
 function seleccionarHistorial(row, corte, onDataChange) {
   // Deseleccionar anterior
-  let prevSelected = document.querySelector(
+  var prevSelected = document.querySelector(
     ".at-asignar__historial-row.selected",
   );
   if (prevSelected) prevSelected.classList.remove("selected");
@@ -767,7 +883,8 @@ function seleccionarHistorial(row, corte, onDataChange) {
   row.classList.add("selected");
   historialSeleccionado = {
     trabajadorId: parseInt(row.dataset.trabajadorId, 10),
-    tareaIdx: parseInt(row.dataset.tareaIdx, 10),
+    componenteIdx: parseInt(row.dataset.componente, 10),
+    tareaIdx: parseInt(row.dataset.tarea, 10),
   };
 
   mostrarAsignarFAB(corte, onDataChange);
@@ -785,7 +902,7 @@ function mostrarAsignarFAB(corte, onDataChange) {
   // En pantallas grandes (tablet+) no mostrar FAB: hay botones inline
   if (window.innerWidth >= 768) return;
 
-  let fabContainer = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
+  var fabContainer = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
   if (!fabContainer) {
     fabContainer = document.createElement("div");
     fabContainer.id = ASIGNAR_FAB_CONTAINER_ID;
@@ -816,12 +933,12 @@ function mostrarAsignarFAB(corte, onDataChange) {
 }
 
 function ocultarAsignarFAB() {
-  let fabContainer = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
+  var fabContainer = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
   if (!fabContainer) return;
 
   fabContainer.classList.remove("visible");
   ocultarAsignarFABsTimeout = setTimeout(function () {
-    let contenedor = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
+    var contenedor = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
     if (contenedor) contenedor.remove();
     ocultarAsignarFABsTimeout = null;
   }, 300);
@@ -842,15 +959,15 @@ function configurarClickOutsideAsignar(corte, onDataChange) {
     function (e) {
       if (!historialSeleccionado) return;
 
-      let historialEl = document.getElementById("at-asignar-historial");
-      let fabEl = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
+      var historialEl = document.getElementById("at-asignar-historial");
+      var fabEl = document.getElementById(ASIGNAR_FAB_CONTAINER_ID);
 
       // Si el click esta dentro del historial o del FAB, ignorar
       if (historialEl && historialEl.contains(e.target)) return;
       if (fabEl && fabEl.contains(e.target)) return;
 
       // Click fuera: deseleccionar
-      let selected = document.querySelector(
+      var selected = document.querySelector(
         ".at-asignar__historial-row.selected",
       );
       if (selected) selected.classList.remove("selected");
@@ -873,11 +990,11 @@ function configurarClickOutsideAsignar(corte, onDataChange) {
  * @returns {Array} - Asignaciones con { trabajadorId, cantidad, talla, fecha }
  */
 function recogerAsignacionesPorTalla(corte, trabajadorId, fecha) {
-  let asignaciones = [];
+  var asignaciones = [];
   corte.tallas.forEach(function (talla) {
-    let inputId = "input-talla-" + talla.talla.replace(/\s+/g, "-");
-    let input = document.getElementById(inputId);
-    let cantidad = input ? parseInt(input.value, 10) || 0 : 0;
+    var inputId = "input-talla-" + talla.talla.replace(/\s+/g, "-");
+    var input = document.getElementById(inputId);
+    var cantidad = input ? parseInt(input.value, 10) || 0 : 0;
     if (cantidad > 0) {
       asignaciones.push({
         trabajadorId: trabajadorId,
@@ -891,16 +1008,16 @@ function recogerAsignacionesPorTalla(corte, trabajadorId, fecha) {
 }
 
 async function procesarAsignacion(corte, onDataChange) {
-  let selectTrabajador = document.getElementById("select-asignar-trabajador");
-  let selectTarea = document.getElementById("select-asignar-tarea");
-  let errorEl = document.getElementById("error-asignacion");
+  var selectTrabajador = document.getElementById("select-asignar-trabajador");
+  var selectTarea = document.getElementById("select-asignar-tarea");
+  var errorEl = document.getElementById("error-asignacion");
 
   if (!selectTrabajador || !selectTarea) return;
 
-  let trabajadorId = selectTrabajador.value
+  var trabajadorId = selectTrabajador.value
     ? parseInt(selectTrabajador.value, 10)
     : null;
-  let tareaValue = selectTarea.value;
+  var tareaValue = selectTarea.value;
 
   // Resetear errores
   errorEl.hidden = true;
@@ -918,17 +1035,17 @@ async function procesarAsignacion(corte, onDataChange) {
     return;
   }
 
-  let esCrear = tareaValue === "__nueva__";
-  let tieneTallas = corte.tallas && corte.tallas.length > 0;
-  let fecha = new Date().toISOString();
-  let tareasActualizadas;
+  var esCrear = tareaValue === "__nueva__";
+  var tieneTallas = corte.tallas && corte.tallas.length > 0;
+  var fecha = new Date().toISOString();
+  var componentesActualizados;
 
   if (esCrear) {
     // ---- MODO CREAR NUEVA TAREA ----
 
-    let inputNombre = document.getElementById("input-asignar-nombre-tarea");
-    let nombre = inputNombre ? inputNombre.value.trim() : "";
-    let errorNombre = document.getElementById("error-asignar-nombre");
+    var inputNombre = document.getElementById("input-asignar-nombre-tarea");
+    var nombre = inputNombre ? inputNombre.value.trim() : "";
+    var errorNombre = document.getElementById("error-asignar-nombre");
 
     // Validar nombre
     if (!nombre) {
@@ -939,9 +1056,14 @@ async function procesarAsignacion(corte, onDataChange) {
       return;
     }
 
-    // Verificar duplicado
-    let duplicado = (corte.tareas || []).some(function (t) {
-      return (t.nombre || "").trim().toLowerCase() === nombre.toLowerCase();
+    // Verificar duplicado (en todos los componentes)
+    var duplicado = false;
+    (corte.componentes || []).forEach(function (comp) {
+      (comp.tareas || []).forEach(function (t) {
+        if ((t.nombre || "").trim().toLowerCase() === nombre.toLowerCase()) {
+          duplicado = true;
+        }
+      });
     });
     if (duplicado) {
       errorNombre.textContent = "Ya existe una tarea con ese nombre";
@@ -952,8 +1074,8 @@ async function procesarAsignacion(corte, onDataChange) {
     }
 
     // Validar precio
-    let inputPrecio = document.getElementById("input-asignar-precio");
-    let precio = inputPrecio ? parseInt(inputPrecio.value, 10) || 0 : 0;
+    var inputPrecio = document.getElementById("input-asignar-precio");
+    var precio = inputPrecio ? parseInt(inputPrecio.value, 10) || 0 : 0;
 
     if (precio <= 0) {
       errorEl.textContent = "El precio debe ser mayor a 0";
@@ -963,21 +1085,33 @@ async function procesarAsignacion(corte, onDataChange) {
       return;
     }
 
-    // Calcular id unico para la nueva tarea
-    let cantidadPrendas = corte.tallas.reduce(function (s, t) {
+    // Obtener el componente seleccionado
+    var componenteSelect = document.getElementById("input-asignar-componente");
+    var componenteNombre = componenteSelect ? componenteSelect.value : "";
+    var errorComponente = document.getElementById("error-asignar-componente");
+
+    if (!componenteNombre) {
+      errorComponente.textContent = "Selecciona un componente";
+      errorComponente.hidden = false;
+      if (componenteSelect) componenteSelect.focus();
+      return;
+    }
+
+    // Calcular id unico para la nueva tarea (max entre todos los componentes)
+    var todosIds = [];
+    (corte.componentes || []).forEach(function (comp) {
+      (comp.tareas || []).forEach(function (t) {
+        todosIds.push(t.id || 0);
+      });
+    });
+    var nuevoId = todosIds.length > 0 ? Math.max.apply(null, todosIds) + 1 : 1;
+
+    // Calcular cantidad de prendas desde las tallas
+    var cantidadPrendas = (corte.tallas || []).reduce(function (s, t) {
       return s + t.cantidad;
     }, 0);
-    let nuevoId =
-      ((corte.tareas || []).length > 0
-        ? Math.max.apply(
-            null,
-            corte.tareas.map(function (t) {
-              return t.id || 0;
-            }),
-          )
-        : 0) + 1;
 
-    let nuevaTarea = {
+    var nuevaTarea = {
       id: nuevoId,
       nombre: nombre,
       precioUnitario: precio,
@@ -987,7 +1121,7 @@ async function procesarAsignacion(corte, onDataChange) {
 
     // Recolectar asignaciones (por talla o global)
     if (tieneTallas) {
-      let nuevasAsignaciones = recogerAsignacionesPorTalla(
+      var nuevasAsignaciones = recogerAsignacionesPorTalla(
         corte,
         trabajadorId,
         fecha,
@@ -999,10 +1133,10 @@ async function procesarAsignacion(corte, onDataChange) {
       }
       nuevaTarea.asignaciones = nuevasAsignaciones;
     } else {
-      let inputCantidad = document.getElementById(
+      var inputCantidad = document.getElementById(
         "input-asignar-cantidad-global",
       );
-      let cantidad = inputCantidad ? parseInt(inputCantidad.value, 10) || 0 : 0;
+      var cantidad = inputCantidad ? parseInt(inputCantidad.value, 10) || 0 : 0;
       if (!cantidad || cantidad < 1) {
         errorEl.textContent = "Ingresa una cantidad valida";
         errorEl.hidden = false;
@@ -1019,31 +1153,59 @@ async function procesarAsignacion(corte, onDataChange) {
       ];
     }
 
-    tareasActualizadas = (corte.tareas || []).concat([nuevaTarea]);
+    // Buscar el componente por nombre; si no existe, crearlo
+    var componentes = corte.componentes || [];
+    var idxComponente = -1;
+    for (var ci = 0; ci < componentes.length; ci++) {
+      if (componentes[ci].nombre === componenteNombre) {
+        idxComponente = ci;
+        break;
+      }
+    }
+
+    if (idxComponente >= 0) {
+      // Agregar tarea al componente existente
+      componentesActualizados = componentes.map(function (c, i) {
+        if (i === idxComponente) {
+          return Object.assign({}, c, {
+            tareas: (c.tareas || []).concat([nuevaTarea]),
+          });
+        }
+        return c;
+      });
+    } else {
+      // Crear nuevo componente "General" o el nombre elegido
+      componentesActualizados = componentes.concat([
+        {
+          nombre: componenteNombre,
+          tareas: [nuevaTarea],
+        },
+      ]);
+    }
   } else {
     // ---- MODO TAREA EXISTENTE ----
 
-    let tareaId = parseInt(tareaValue, 10);
-    let tareaIdx = (corte.tareas || []).findIndex(function (t) {
-      return t.id === tareaId;
-    });
+    // Parsear valor compuesto "compIdx-tareaIdx"
+    var partes = tareaValue.split("-");
+    var componenteIdx = parseInt(partes[0], 10);
+    var tareaIdx = parseInt(partes[1], 10);
 
-    if (tareaIdx < 0) {
+    var comp = (corte.componentes || [])[componenteIdx];
+    if (!comp || !(comp.tareas || [])[tareaIdx]) {
       errorEl.textContent = "Tarea no encontrada";
       errorEl.hidden = false;
       return;
     }
 
-    let tarea = corte.tareas[tareaIdx];
+    var tarea = comp.tareas[tareaIdx];
 
     // Detectar si el precio fue modificado
-    let inputPrecio = document.getElementById("input-asignar-precio");
-    let nuevoPrecio = inputPrecio
+    var nuevoPrecio = inputPrecio
       ? parseInt(inputPrecio.value, 10) || 0
       : tarea.precioUnitario || 0;
 
     // Recolectar asignaciones (por talla o global)
-    let nuevasAsignaciones;
+    var nuevasAsignaciones;
     if (tieneTallas) {
       nuevasAsignaciones = recogerAsignacionesPorTalla(
         corte,
@@ -1056,10 +1218,10 @@ async function procesarAsignacion(corte, onDataChange) {
         return;
       }
     } else {
-      let inputCantidad = document.getElementById(
+      var inputCantidad = document.getElementById(
         "input-asignar-cantidad-global",
       );
-      let cantidad = inputCantidad ? parseInt(inputCantidad.value, 10) || 0 : 0;
+      var cantidad = inputCantidad ? parseInt(inputCantidad.value, 10) || 0 : 0;
       if (!cantidad || cantidad < 1) {
         errorEl.textContent = "Ingresa una cantidad valida";
         errorEl.hidden = false;
@@ -1077,20 +1239,26 @@ async function procesarAsignacion(corte, onDataChange) {
     }
 
     // Actualizar la tarea con nuevas asignaciones y precio (si cambio)
-    tareasActualizadas = (corte.tareas || []).map(function (t, i) {
-      if (i === tareaIdx) {
-        return Object.assign({}, t, {
-          precioUnitario: nuevoPrecio,
-          asignaciones: (t.asignaciones || []).concat(nuevasAsignaciones),
+    componentesActualizados = (corte.componentes || []).map(function (c, ci) {
+      if (ci === componenteIdx) {
+        var tareasActualizadas = (c.tareas || []).map(function (t, ti) {
+          if (ti === tareaIdx) {
+            return Object.assign({}, t, {
+              precioUnitario: nuevoPrecio,
+              asignaciones: (t.asignaciones || []).concat(nuevasAsignaciones),
+            });
+          }
+          return t;
         });
+        return Object.assign({}, c, { tareas: tareasActualizadas });
       }
-      return t;
+      return c;
     });
   }
 
   // Persistir en IndexedDB
   try {
-    await db.cortes.update(corte.id, { tareas: tareasActualizadas });
+    await db.cortes.update(corte.id, { componentes: componentesActualizados });
     mostrarToast("Asignacion guardada", "success");
     if (onDataChange) await onDataChange();
   } catch (err) {
@@ -1101,12 +1269,13 @@ async function procesarAsignacion(corte, onDataChange) {
 
 // ============================================================
 // ELIMINAR ASIGNACIONES - Borra TODAS las asignaciones de un
-// trabajador en una tarea especifica (eliminacion masiva).
+// trabajador en una tarea de un componente (eliminacion masiva).
 // ============================================================
 
 function confirmarEliminarAsignacion(corte, seleccion, onDataChange) {
-  let tarea = (corte.tareas || [])[seleccion.tareaIdx];
-  let tareaNombre = tarea ? tarea.nombre || "Sin nombre" : "desconocida";
+  var comp = (corte.componentes || [])[seleccion.componenteIdx];
+  var tarea = comp && (comp.tareas || [])[seleccion.tareaIdx];
+  var tareaNombre = tarea ? tarea.nombre || "Sin nombre" : "desconocida";
 
   mostrarModalConfirmar(
     "Eliminar Asignaciones",
@@ -1116,20 +1285,26 @@ function confirmarEliminarAsignacion(corte, seleccion, onDataChange) {
     "danger",
     async function () {
       try {
-        // Filtrar TODAS las asignaciones de ese trabajador en esa tarea
-        let tareasActualizadas = (corte.tareas || []).map(function (t, i) {
-          if (i === seleccion.tareaIdx) {
-            let nuevasAsignaciones = (t.asignaciones || []).filter(
-              function (a) {
-                return a.trabajadorId !== seleccion.trabajadorId;
-              },
-            );
-            return Object.assign({}, t, { asignaciones: nuevasAsignaciones });
+        // Filtrar TODAS las asignaciones de ese trabajador en esa tarea especifica
+        var componentesActualizados = (corte.componentes || []).map(function (c, ci) {
+          if (ci === seleccion.componenteIdx) {
+            var tareasActualizadas = (c.tareas || []).map(function (t, ti) {
+              if (ti === seleccion.tareaIdx) {
+                var nuevasAsignaciones = (t.asignaciones || []).filter(
+                  function (a) {
+                    return a.trabajadorId !== seleccion.trabajadorId;
+                  },
+                );
+                return Object.assign({}, t, { asignaciones: nuevasAsignaciones });
+              }
+              return t;
+            });
+            return Object.assign({}, c, { tareas: tareasActualizadas });
           }
-          return t;
+          return c;
         });
 
-        await db.cortes.update(corte.id, { tareas: tareasActualizadas });
+        await db.cortes.update(corte.id, { componentes: componentesActualizados });
         ocultarAsignarFAB();
         historialSeleccionado = null;
         mostrarToast("Asignaciones eliminadas", "success");

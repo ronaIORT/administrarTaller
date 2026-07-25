@@ -198,6 +198,14 @@
   background-color: #ff8066;
 }
 
+.fab-export {
+  background-color: var(--color-info);
+}
+
+.fab-export:hover {
+  background-color: #7dd888;
+}
+
 .tareas-section-header {
   display: flex;
   align-items: center;
@@ -443,6 +451,157 @@
 
 .tarea-fab-clear-assign:hover {
   background-color: #cc9500;
+}
+
+.componentes-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+
+.componentes-section-header .section-title {
+  font-size: var(--font-size-md);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.componentes-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.componentes-input-row {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.componentes-input-row .form-input {
+  flex: 1;
+  max-width: 250px;
+}
+
+#componente-filter-chips {
+  margin-top: var(--space-2);
+}
+
+.filter-chip--sm {
+  font-size: var(--font-size-xs);
+  padding: 4px 8px;
+}
+
+.filter-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 5px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.55;
+  transition: all var(--transition-fast);
+  vertical-align: middle;
+}
+
+.filter-chip__remove:hover {
+  opacity: 1;
+  background-color: rgba(239, 68, 68, 0.2);
+  color: var(--color-error, #ef4444);
+}
+
+.filter-chip.active .filter-chip__remove {
+  opacity: 0.7;
+}
+
+.filter-chip.active .filter-chip__remove:hover {
+  opacity: 1;
+}
+
+.componente-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-primary);
+  background-color: var(--color-primary-bg);
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  margin-right: var(--space-1);
+  vertical-align: middle;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.tareas-tabla-header__componente {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tarea-tabla-componente {
+  flex: 1;
+  text-align: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Componente Card — estilos base en nuevo-corte.css */
+/* Aqui solo los exclusivos del form de prenda */
+
+.componente-card__delete {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  transition: all var(--transition-fast);
+}
+
+.componente-card__delete:hover {
+  color: var(--color-error);
+  opacity: 1;
+}
+
+.import-prenda-item {
+  margin-bottom: var(--space-4);
+}
+
+.import-prenda-item:last-child .import-divider {
+  display: none;
+}
+
+.import-divider {
+  border: none;
+  border-top: 1px solid var(--color-divider);
+  margin: var(--space-3) 0 0;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+  .agregar-tarea-row {
+    flex-wrap: wrap;
+  }
+  .agregar-tarea-row .form-input:first-child {
+    flex: 1 1 100%;
+    margin-bottom: var(--space-1);
+  }
+  .componente-card__add-row {
+    flex-wrap: wrap;
+  }
+  .componente-card__add-row .form-input:first-child {
+    flex: 1 1 100%;
+    margin-bottom: var(--space-1);
+  }
 }
 
 @media (min-width: 1024px) {

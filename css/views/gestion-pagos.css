@@ -478,7 +478,7 @@
   color: var(--color-accent);
 }
 
-/* Badge de etiqueta de corte (historial y modal) */
+/* Badge de componente de corte (historial y modal) */
 .badge--corte {
   background-color: var(--color-surface-variant);
   color: var(--color-text-secondary);

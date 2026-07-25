@@ -24,48 +24,51 @@ export async function renderTabTrabajador(corte, container, opciones) {
   const { trabajadoresMap, onDataChange } = opciones;
 
   // Agrupar asignaciones por trabajadorId y luego por tarea
-  // Estructura: { trabajadorId: { tareas: [{ tareaNombre, precioUnitario, tallas: [{ nombre, cantidadAsignada, totalCorte }], totalCtv }], totalCtv } }
+  // Estructura: { trabajadorId: { tareas: [{ tareaNombre, componenteNombre, precioUnitario, tallas: [{ nombre, cantidadAsignada, totalCorte }], totalCtv }], totalCtv } }
   const agrupado = {};
   let totalGeneralCtv = 0;
 
-  (corte.tareas || []).forEach(function (tarea) {
-    (tarea.asignaciones || []).forEach(function (a) {
-      const tid = a.trabajadorId;
-      if (!agrupado[tid]) {
-        agrupado[tid] = { tareas: [], totalCtv: 0 };
-      }
+  (corte.componentes || []).forEach(function (comp) {
+    (comp.tareas || []).forEach(function (tarea) {
+      (tarea.asignaciones || []).forEach(function (a) {
+        const tid = a.trabajadorId;
+        if (!agrupado[tid]) {
+          agrupado[tid] = { tareas: [], totalCtv: 0 };
+        }
 
-      // Buscar si ya existe esta tarea agrupada para este trabajador
-      let tareaAgrupada = agrupado[tid].tareas.find(function (ta) {
-        return ta.tareaNombre === (tarea.nombre || "Sin nombre");
+        // Buscar si ya existe esta tarea agrupada para este trabajador
+        let tareaAgrupada = agrupado[tid].tareas.find(function (ta) {
+          return ta.tareaNombre === (tarea.nombre || "Sin nombre");
+        });
+
+        if (!tareaAgrupada) {
+          tareaAgrupada = {
+            tareaNombre: tarea.nombre || "Sin nombre",
+            componenteNombre: comp.nombre || null,
+            precioUnitario: tarea.precioUnitario || 0,
+            tallas: [],
+            totalCtv: 0,
+          };
+          agrupado[tid].tareas.push(tareaAgrupada);
+        }
+
+        const subtotal = (a.cantidad || 0) * (tarea.precioUnitario || 0);
+        const totalCorte =
+          (
+            (corte.tallas || []).find(function (ct) {
+              return ct.talla === a.talla;
+            }) || {}
+          ).cantidad || 0;
+
+        tareaAgrupada.tallas.push({
+          nombre: a.talla || "-",
+          cantidadAsignada: a.cantidad || 0,
+          totalCorte: totalCorte,
+        });
+        tareaAgrupada.totalCtv += subtotal;
+        agrupado[tid].totalCtv += subtotal;
+        totalGeneralCtv += subtotal;
       });
-
-      if (!tareaAgrupada) {
-        tareaAgrupada = {
-          tareaNombre: tarea.nombre || "Sin nombre",
-          precioUnitario: tarea.precioUnitario || 0,
-          tallas: [],
-          totalCtv: 0,
-        };
-        agrupado[tid].tareas.push(tareaAgrupada);
-      }
-
-      const subtotal = (a.cantidad || 0) * (tarea.precioUnitario || 0);
-      const totalCorte =
-        (
-          (corte.tallas || []).find(function (ct) {
-            return ct.talla === a.talla;
-          }) || {}
-        ).cantidad || 0;
-
-      tareaAgrupada.tallas.push({
-        nombre: a.talla || "-",
-        cantidadAsignada: a.cantidad || 0,
-        totalCorte: totalCorte,
-      });
-      tareaAgrupada.totalCtv += subtotal;
-      agrupado[tid].totalCtv += subtotal;
-      totalGeneralCtv += subtotal;
     });
   });
 
@@ -133,7 +136,7 @@ export async function renderTabTrabajador(corte, container, opciones) {
           .join("");
 
         return (
-          '<div class="at-trabajador__tabla-row">' +
+	  '<div class="at-trabajador__tabla-row">' +
           "<span>" +
           escaparHTML(tarea.tareaNombre) +
           "</span>" +
@@ -332,7 +335,7 @@ function generarTextoFormateado(corte, datosTrab, nombreTrab) {
 
   texto += "\n";
 
-  // Tareas asignadas
+  // Tareas asignadas (itera los datos ya agrupados por trabajador)
   texto += "📊 *TAREAS ASIGNADAS:*\n";
 
   const todasTallasCorte = (corte.tallas || []).map(function (ct) { return ct.talla; });

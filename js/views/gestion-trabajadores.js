@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { escaparHTML, formatBsCtv } from "../utils.js";
+import { escaparHTML, formatBsCtv, iterarTareasCorte } from "../utils.js";
 import { mostrarModalConfirmar, mostrarToast, estadoVacioHTML } from "./shared.js";
 
 // ============================================================
@@ -80,16 +80,15 @@ async function calcularDatosTrabajadores() {
     const cortes = await db.cortes.toArray();
 
     for (const corte of cortes) {
-      if (!corte.tareas) continue;
-      for (const tarea of corte.tareas) {
-        if (!tarea.asignaciones) continue;
+      iterarTareasCorte(corte, function (tarea) {
+        if (!tarea.asignaciones) return;
         for (const asig of tarea.asignaciones) {
           const tid = asig.trabajadorId;
           if (!datos[tid]) datos[tid] = { ganadoCtv: 0, tieneAsignacionesActivas: false };
           datos[tid].ganadoCtv += (asig.cantidad || 0) * (tarea.precioUnitario || 0);
           if (corte.estado === "activo") datos[tid].tieneAsignacionesActivas = true;
         }
-      }
+      });
     }
 
     for (const tid in datos) {
@@ -467,15 +466,14 @@ async function confirmarEliminar(id, nombre) {
     const cortes = await db.cortes.toArray();
 
     for (const corte of cortes) {
-      if (!corte.tareas) continue;
-      for (const tarea of corte.tareas) {
-        if (!tarea.asignaciones) continue;
+      iterarTareasCorte(corte, function (tarea) {
+        if (!tarea.asignaciones) return;
         for (const asig of tarea.asignaciones) {
           if (asig.trabajadorId === id && corte.estado === "activo") {
             tieneAsignacionesActivas = true;
           }
         }
-      }
+      });
     }
   } catch (err) {
     console.error("Error verificando asignaciones:", err);

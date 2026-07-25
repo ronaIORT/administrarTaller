@@ -9,7 +9,7 @@
 // ============================================================
 
 import { db } from "../db.js";
-import { centavosABolivianos, escaparHTML } from "../utils.js";
+import { centavosABolivianos, escaparHTML, iterarTareasCorte } from "../utils.js";
 import { estadoVacioHTML } from "./shared.js";
 
 let abortController = null;
@@ -180,10 +180,9 @@ function calcularTopCortes(cortes, prendasMap, periodo, n) {
 }
 
 function calcularProgresoCorte(corte) {
-  if (!corte.tareas || corte.tareas.length === 0) return 0;
   var totalAsignadas = 0;
   var totalPosible = 0;
-  corte.tareas.forEach(function (tarea) {
+  iterarTareasCorte(corte, function (tarea) {
     totalPosible += (tarea.unidadesTotales || 0);
     if (tarea.asignaciones) {
       totalAsignadas += tarea.asignaciones.reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);

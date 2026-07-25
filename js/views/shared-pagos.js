@@ -6,7 +6,7 @@
 // ============================================================
 
 import { db } from "../db.js";
-import { escaparHTML, formatBs } from "../utils.js";
+import { escaparHTML, formatBs, iterarTareasCorte } from "../utils.js";
 import { mostrarToast } from "./shared.js";
 
 // ============================================================
@@ -216,7 +216,7 @@ async function calcularPendienteActual(corteId, trabajadorId) {
   if (!corte) return 0;
 
   var ganadoCtv = 0;
-  (corte.tareas || []).forEach(function (t) {
+  iterarTareasCorte(corte, function (t) {
     (t.asignaciones || []).forEach(function (a) {
       if (a.trabajadorId === trabajadorId) {
         ganadoCtv += (a.cantidad || 0) * (t.precioUnitario || 0);

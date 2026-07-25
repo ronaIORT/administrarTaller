@@ -259,86 +259,86 @@
   height: 16px;
 }
 
-/* Tabla de tareas expandida */
-.at-corte-tabla {
-  border: 1px solid var(--color-divider);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
+/* =============================================================
+ * TAREA ROW DENTRO DE CARD (tab-corte)
+ * Cada tarea se muestra como una fila interactiva dentro
+ * de la card del componente, con nombre, precio, y
+ * lista de asignaciones por trabajador.
+ * ============================================================= */
 
-.at-corte-tabla__header {
-  display: grid;
-  grid-template-columns: 1fr 90px 1fr;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background-color: var(--color-surface-variant);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.at-corte-tabla__row {
-  display: grid;
-  grid-template-columns: 1fr 90px 1fr;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-divider);
-  font-size: var(--font-size-sm);
-  align-items: start;
+.at-corte-task-row {
+  padding: var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-divider);
   cursor: pointer;
   transition: background-color var(--transition-fast);
 }
 
-.at-corte-tabla__row:hover {
-  background-color: var(--color-surface);
+.at-corte-task-row:last-child {
+  border-bottom: none;
 }
 
-.at-corte-tabla__row.selected {
+.at-corte-task-row:hover {
+  background-color: var(--color-hover-bg, rgba(255, 255, 255, 0.03));
+}
+
+.at-corte-task-row.selected {
   background-color: var(--color-primary-bg);
   border-left: 3px solid var(--color-primary);
+  padding-left: calc(var(--space-3) - 3px);
 }
 
-.at-corte-tabla__tarea {
+.at-corte-task-header {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--space-2);
   font-weight: var(--font-weight-medium);
   color: var(--color-text);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-1);
 }
 
-.at-corte-tabla__precio {
+.at-corte-task-header__precio {
+  margin-left: auto;
   font-size: var(--font-size-xs);
   color: var(--color-text-muted);
   font-weight: var(--font-weight-normal);
+  flex-shrink: 0;
 }
 
-.at-corte-tabla__tallas {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: right;
-}
-
-.at-corte-tabla__trabajadores {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.at-corte-task-header__count {
   font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-  text-align: right;
-}
-
-.at-corte-tabla__linea {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
+  color: var(--color-text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.at-corte-tabla__trabajador-nombre {
-  font-weight: var(--font-weight-medium);
+.at-corte-assignments {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.at-corte-assignment-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  gap: var(--space-2);
+}
+
+.at-corte-assignment-line--empty {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.at-corte-assignment-talla {
+  font-weight: var(--font-weight-semibold);
   color: var(--color-text);
+}
+
+.at-corte-assignment-cantidad {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Info extra: tallas y progreso */
@@ -555,6 +555,10 @@
 .at-editar__costo-prenda {
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
+  padding: var(--space-3) var(--space-4);
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-surface-variant) 100%);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
 }
 
 .at-editar__costo-prenda strong {
@@ -562,30 +566,14 @@
   font-weight: var(--font-weight-semibold);
 }
 
+.at-editar__costo-componente {
+  display: block;
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
+}
+
 /* Reutiliza .filter-chips de gestion-cortes.css */
-
-/* Formulario para agregar tarea al final */
-.at-editar__nueva-tarea {
-  display: flex;
-  gap: var(--space-2);
-  align-items: stretch;
-}
-
-.at-editar__nueva-tarea .form-input:first-child {
-  flex: 1;
-}
-
-.at-editar__nueva-tarea .form-input:nth-child(2) {
-  width: 70px;
-  flex-shrink: 0;
-}
-
-.at-editar__nueva-tarea .btn--sm {
-  width: 38px;
-  height: 38px;
-  flex-shrink: 0;
-  padding: 0;
-}
 
 /* Boton Actualizar Prenda */
 .at-editar__acciones {
@@ -836,11 +824,6 @@
     grid-template-columns: repeat(4, 1fr);
   }
 
-  .at-corte-tabla__header,
-  .at-corte-tabla__row {
-    grid-template-columns: 1fr 110px 1fr;
-  }
-
   .at-trabajador__tabla-header,
   .at-trabajador__tabla-row {
     grid-template-columns: 1fr 200px auto;
@@ -880,4 +863,19 @@
   .at-trabajador__bloque {
     padding: var(--space-5);
   }
+}
+
+/* ----- BADGE DE COMPONENTE ----- */
+
+.componente-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-success);
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success);
+  border-radius: var(--radius-full);
+  margin-right: var(--space-1);
+  vertical-align: middle;
 }

@@ -1,14 +1,14 @@
 // ============================================================
-// TAB CORTE - Vista tabular de tareas con trabajadores
-// Muestra cada tarea con su precio, total asignado, y lista de
-// trabajadores que participan con sus tallas.
+// TAB CORTE - Vista de tareas agrupadas por componente en cards
+// Muestra cada componente como una card colapsable con sus tareas,
+// precio, total asignado, y lista de trabajadores participantes.
 // En cortes activos: botones Asignar Tareas y Finalizar Corte.
 // En cortes terminados: badge "CORTE FINALIZADO".
 // Soporta seleccion de fila con FABs para Asignar y Eliminar Asignaciones.
 // ============================================================
 
 import { db } from "../../db.js";
-import { escaparHTML, formatCtv } from "../../utils.js";
+import { escaparHTML, formatCtv, formatCostoTotal, COMPONENTE_DEFAULT } from "../../utils.js";
 import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
 import { abrirModalAsignarTarea, confirmarEliminarAsignaciones } from "./asignacion-compartida.js";
 
@@ -19,8 +19,8 @@ import { abrirModalAsignarTarea, confirmarEliminarAsignaciones } from "./asignac
 /** ID del contenedor de FABs para este tab */
 const CORTE_FAB_CONTAINER_ID = "at-corte-fab-container";
 
-/** Indice de la fila de tarea seleccionada */
-let filaCorteSeleccionadaIdx = null;
+/** Indices de la fila seleccionada: { componenteIdx, tareaIdx } */
+let filaCorteSeleccionada = null;
 
 /** Timeout para ocultar FABs con animacion */
 let ocultarCorteFABsTimeout = null;
@@ -31,11 +31,14 @@ let onDataChangeCorteRef = null;
 /** Mapa trabajadorId -> nombre para delegar a modales */
 let trabajadoresMapCorteRef = null;
 
+let componentesCorteData = [];
+let componenteCorteFiltroActivo = "__todas";
+
 // ============================================================
 // RENDER PRINCIPAL
 // ============================================================
 
-export function renderTabCorte(corte, container, opciones) {
+export function renderTabCorte(corte, container, opciones, mantenerFiltro) {
   const { trabajadoresMap, onCambiarTab, onFinalizar, onDataChange } = opciones;
 
   onDataChangeCorteRef = onDataChange || null;
@@ -43,10 +46,20 @@ export function renderTabCorte(corte, container, opciones) {
 
   // Limpiar FABs del estado anterior
   document.getElementById(CORTE_FAB_CONTAINER_ID)?.remove();
-  filaCorteSeleccionadaIdx = null;
+  filaCorteSeleccionada = null;
+  componentesCorteData = (corte.componentes || []).map(function (c) { return c.nombre; });
+  if (!mantenerFiltro) componenteCorteFiltroActivo = "__todas";
 
   const esTerminado = corte.estado === "terminado";
   const progreso = calcularProgreso(corte);
+
+  // Construir chips de componente
+  var compsCorte = componentesCorteData.length > 0 ? componentesCorteData : [COMPONENTE_DEFAULT];
+  var componenteChipsHTML = '<button class="filter-chip' + (componenteCorteFiltroActivo === "__todas" ? " active" : "") + '" data-componente="__todas">Todas</button>';
+  compsCorte.forEach(function (c) {
+    var activo = componenteCorteFiltroActivo === c ? " active" : "";
+    componenteChipsHTML += '<button class="filter-chip' + activo + '" data-componente="' + escaparHTML(c) + '">' + escaparHTML(c) + '</button>';
+  });
 
   // Tallas del corte
   let tallasHTML = "";
@@ -67,77 +80,7 @@ export function renderTabCorte(corte, container, opciones) {
       .join("");
   }
 
-  // Construir filas de la tabla
-  let filasHTML = "";
-  if (corte.tareas && corte.tareas.length > 0) {
-    filasHTML = corte.tareas
-      .map(function (tarea, idx) {
-        const lineasPares = (tarea.asignaciones || []).map(function (a) {
-          const totalCorte =
-            (
-              (corte.tallas || []).find(function (ct) {
-                return ct.talla === a.talla;
-              }) || {}
-            ).cantidad || 0;
-          const nombreTrab = escaparHTML(
-            trabajadoresMap[a.trabajadorId] || "Trab. " + a.trabajadorId,
-          );
-
-          return {
-            talla:
-              '<span class="at-corte-tabla__linea">' +
-              escaparHTML(a.talla || "-") +
-              " || " +
-              (a.cantidad || 0) +
-              "/" +
-              totalCorte +
-              "</span>",
-            trabajador:
-              '<span class="at-corte-tabla__linea">' + nombreTrab + "</span>",
-          };
-        });
-
-        const tallasHTML =
-          lineasPares.length > 0
-            ? lineasPares
-                .map(function (p) {
-                  return p.talla;
-                })
-                .join("")
-            : '<span class="at-corte-tabla__linea" style="color:var(--color-text-muted);">Sin asignar</span>';
-
-        const trabajadoresHTML =
-          lineasPares.length > 0
-            ? lineasPares
-                .map(function (p) {
-                  return p.trabajador;
-                })
-                .join("")
-            : '<span class="at-corte-tabla__linea" style="color:var(--color-text-muted);">Sin asignar</span>';
-
-        return (
-          '<div class="at-corte-tabla__row" data-idx="' + idx + '">' +
-          '<div class="at-corte-tabla__tarea">' +
-          "<span>" +
-          escaparHTML(tarea.nombre || "Sin nombre") +
-          "</span>" +
-          '<span class="at-corte-tabla__precio">' +
-          formatCtv(tarea.precioUnitario || 0) +
-          "</span>" +
-          "</div>" +
-          '<div class="at-corte-tabla__tallas">' +
-          tallasHTML +
-          "</div>" +
-          '<div class="at-corte-tabla__trabajadores">' +
-          trabajadoresHTML +
-          "</div>" +
-          "</div>"
-        );
-      })
-      .join("");
-  }
-
-  // Badge de estado en la seccion de corte
+  // Badge de estado
   let estadoBadgeHTML;
   if (esTerminado) {
     estadoBadgeHTML =
@@ -172,18 +115,12 @@ export function renderTabCorte(corte, container, opciones) {
     (tallasHTML
       ? '<div class="at-corte__tallas">' + tallasHTML + "</div>"
       : "") +
-    // Tabla de tareas
-    '<div class="at-corte-tabla">' +
-    '<div class="at-corte-tabla__header">' +
-    "<span>Tarea</span>" +
-    "<span>Tallas</span>" +
-    "<span>Trabajadores</span>" +
-    "</div>" +
-    '<div id="at-corte-tabla-body">' +
-    (filasHTML ||
-      '<div class="at-corte-tabla__row" style="color:var(--color-text-muted);grid-template-columns:1fr;">Sin tareas registradas</div>') +
-    "</div>" +
-    "</div>" +
+    // Filtro por componente
+    '<div class="filter-chips" id="corte-componente-filter-chips">' + componenteChipsHTML + '</div>' +
+    // Cards de componentes con tareas
+    '<div id="at-corte-cards-container">' +
+    renderComponentesCardsCorte(corte) +
+    '</div>' +
     // Botones de accion (solo en cortes activos)
     (esTerminado
       ? ""
@@ -272,42 +209,164 @@ export function renderTabCorte(corte, container, opciones) {
   // SELECCION DE FILA + FABs
   // ============================================================
 
-  const tablaBody = document.getElementById("at-corte-tabla-body");
-  if (tablaBody) {
-    tablaBody.addEventListener("click", function (e) {
-      const row = e.target.closest(".at-corte-tabla__row");
-      if (!row || !row.dataset.idx) return;
-      const idx = parseInt(row.dataset.idx, 10);
-      seleccionarFilaCorte(corte, idx);
+  const cardsContainer = document.getElementById("at-corte-cards-container");
+  if (cardsContainer) {
+    cardsContainer.addEventListener("click", function (e) {
+      // Toggle colapsar card
+      var header = e.target.closest(".componente-card__header");
+      if (header && !e.target.closest("button")) {
+        var card = header.closest(".componente-card");
+        if (card) card.classList.toggle("componente-card--collapsed");
+        return;
+      }
+
+      // Click en fila de tarea (seleccion)
+      var row = e.target.closest(".at-corte-task-row");
+      if (row && !e.target.closest("button")) {
+        var compIdx = parseInt(row.dataset.componente, 10);
+        var tareaIdx = parseInt(row.dataset.tarea, 10);
+        seleccionarFilaCorte(corte, compIdx, tareaIdx);
+        return;
+      }
     });
   }
 
   // Click fuera para deseleccionar
   document.addEventListener("click", function handler(e) {
-    if (!e.target.closest(".at-corte-tabla__row") && !e.target.closest("#" + CORTE_FAB_CONTAINER_ID)) {
+    if (!e.target.closest(".at-corte-task-row") && !e.target.closest("#" + CORTE_FAB_CONTAINER_ID)) {
       deseleccionarFilaCorte();
     }
   });
+
+  // Filtro por componente
+  var componenteFilterChips = document.getElementById("corte-componente-filter-chips");
+  if (componenteFilterChips) {
+    componenteFilterChips.addEventListener("click", function (e) {
+      var chip = e.target.closest(".filter-chip");
+      if (!chip) return;
+      componenteCorteFiltroActivo = chip.dataset.componente;
+      componenteFilterChips.querySelectorAll(".filter-chip").forEach(function (c) { c.classList.remove("active"); });
+      chip.classList.add("active");
+      renderTabCorte(corte, container, opciones, true);
+    });
+  }
+}
+
+// ============================================================
+// RENDER CARDS DE COMPONENTES (solo lectura)
+// Cada card muestra sus tareas con tallas y trabajadores asignados.
+// ============================================================
+
+function renderComponentesCardsCorte(corte) {
+  var componentes = corte.componentes || [];
+
+  if (componentes.length === 0) {
+    return '<div class="at-corte-tabla__row" style="color:var(--color-text-muted);text-align:center;padding:var(--space-6);">Sin tareas registradas</div>';
+  }
+
+  var html = "";
+  componentes.forEach(function (comp, compIdx) {
+    // Filtro por componente
+    if (componenteCorteFiltroActivo !== "__todas" && comp.nombre !== componenteCorteFiltroActivo) return;
+
+    var tareas = comp.tareas || [];
+    var numTareas = tareas.length;
+
+    // Calcular subtotal del componente
+    var subtotal = 0;
+    tareas.forEach(function (t) {
+      subtotal += (t.precioUnitario || 0);
+    });
+
+    html += '<div class="componente-card" data-componente-idx="' + compIdx + '">';
+    html += '<div class="componente-card__header" role="button" tabindex="0" aria-expanded="true">';
+    html += '<svg class="componente-card__chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+    html += '<span class="componente-card__title">' + escaparHTML(comp.nombre || COMPONENTE_DEFAULT) + '</span>';
+    html += '<span class="componente-card__count">' + numTareas + ' tarea' + (numTareas !== 1 ? 's' : '') + '</span>';
+    html += '<span class="componente-card__subtotal">' + formatCostoTotal(subtotal) + '</span>';
+    html += '</div>';
+
+    html += '<div class="componente-card__body">';
+
+    if (numTareas === 0) {
+      html += '<p class="form-hint" style="padding:var(--space-3);text-align:center;margin:0;">Sin tareas en este componente</p>';
+    } else {
+      tareas.forEach(function (tarea, tareaIdx) {
+        html += renderTareaCorteRow(corte, tarea, compIdx, tareaIdx);
+      });
+    }
+
+    html += '</div>'; // body
+    html += '</div>'; // card
+  });
+
+  return html;
+}
+
+// ============================================================
+// RENDER FILA DE TAREA DENTRO DE CARD (solo lectura)
+// Muestra tarea con precio, tallas asignadas y trabajadores.
+// ============================================================
+
+function renderTareaCorteRow(corte, tarea, compIdx, tareaIdx) {
+  var nombre = escaparHTML(tarea.nombre || "Sin nombre");
+  var precio = tarea.precioUnitario || 0;
+  var asignaciones = tarea.asignaciones || [];
+  var totalAsignado = asignaciones.reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+  var unidadesTotales = tarea.unidadesTotales || 0;
+
+  var html = '<div class="at-corte-task-row" data-componente="' + compIdx + '" data-tarea="' + tareaIdx + '" tabindex="0">';
+
+  // Header de la tarea: nombre + precio
+  html += '<div class="at-corte-task-header">';
+  html += '<span>' + nombre + '</span>';
+  html += '<span class="at-corte-task-header__count">' + totalAsignado + '/' + unidadesTotales + ' uds</span>';
+  html += '<span class="at-corte-task-header__precio">' + formatCtv(precio) + '</span>';
+  html += '</div>';
+
+  // Lista de asignaciones
+  html += '<div class="at-corte-assignments">';
+  if (asignaciones.length > 0) {
+    asignaciones.forEach(function (a) {
+      var totalCorte = (
+        (corte.tallas || []).find(function (ct) { return ct.talla === a.talla; }) || {}
+      ).cantidad || 0;
+      var nombreTrab = escaparHTML(
+        trabajadoresMapCorteRef[a.trabajadorId] || "Trab. " + a.trabajadorId
+      );
+
+      html += '<div class="at-corte-assignment-line">';
+      html += '<span><span class="at-corte-assignment-talla">' + escaparHTML(a.talla || "-") + '</span> ' + nombreTrab + '</span>';
+      html += '<span class="at-corte-assignment-cantidad">' + (a.cantidad || 0) + '/' + totalCorte + '</span>';
+      html += '</div>';
+    });
+  } else {
+    html += '<div class="at-corte-assignment-line at-corte-assignment-line--empty">Sin asignar</div>';
+  }
+  html += '</div>'; // assignments
+
+  html += '</div>'; // task-row
+  return html;
 }
 
 // ============================================================
 // SELECCION DE FILA
 // ============================================================
 
-function seleccionarFilaCorte(corte, idx) {
+function seleccionarFilaCorte(corte, compIdx, tareaIdx) {
   deseleccionarFilaCorte();
-  filaCorteSeleccionadaIdx = idx;
+  filaCorteSeleccionada = { componenteIdx: compIdx, tareaIdx: tareaIdx };
 
-  const row = document.querySelector('.at-corte-tabla__row[data-idx="' + idx + '"]');
+  const row = document.querySelector('.at-corte-task-row[data-componente="' + compIdx + '"][data-tarea="' + tareaIdx + '"]');
   if (row) row.classList.add("selected");
 
-  mostrarFABsCorte(corte, idx);
+  mostrarFABsCorte(corte, compIdx, tareaIdx);
 }
 
 function deseleccionarFilaCorte() {
-  const row = document.querySelector(".at-corte-tabla__row.selected");
+  const row = document.querySelector(".at-corte-task-row.selected");
   if (row) row.classList.remove("selected");
-  filaCorteSeleccionadaIdx = null;
+  filaCorteSeleccionada = null;
   ocultarFABsCorte();
 }
 
@@ -315,7 +374,7 @@ function deseleccionarFilaCorte() {
 // FABs - Mostrar / ocultar acciones flotantes
 // ============================================================
 
-function mostrarFABsCorte(corte, idx) {
+function mostrarFABsCorte(corte, compIdx, tareaIdx) {
   if (ocultarCorteFABsTimeout) {
     clearTimeout(ocultarCorteFABsTimeout);
     ocultarCorteFABsTimeout = null;
@@ -324,7 +383,9 @@ function mostrarFABsCorte(corte, idx) {
   // Solo en cortes activos
   if (corte.estado === "terminado") return;
 
-  const tarea = (corte.tareas || [])[idx];
+  const comp = (corte.componentes || [])[compIdx];
+  if (!comp) return;
+  const tarea = (comp.tareas || [])[tareaIdx];
   if (!tarea) return;
 
   const totalAsignado = (tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
@@ -360,8 +421,8 @@ function mostrarFABsCorte(corte, idx) {
   const fabAssign = fabContainer.querySelector(".tarea-fab-assign");
   if (fabAssign) {
     fabAssign.addEventListener("click", function () {
-      if (filaCorteSeleccionadaIdx !== null) {
-        abrirModalAsignarTarea(corte, filaCorteSeleccionadaIdx, onDataChangeCorteRef, trabajadoresMapCorteRef);
+      if (filaCorteSeleccionada) {
+        abrirModalAsignarTarea(corte, filaCorteSeleccionada.componenteIdx, filaCorteSeleccionada.tareaIdx, onDataChangeCorteRef, trabajadoresMapCorteRef);
       }
     });
   }
@@ -369,8 +430,8 @@ function mostrarFABsCorte(corte, idx) {
   const fabClearAssign = fabContainer.querySelector(".tarea-fab-clear-assign");
   if (fabClearAssign) {
     fabClearAssign.addEventListener("click", function () {
-      if (filaCorteSeleccionadaIdx !== null) {
-        confirmarEliminarAsignaciones(corte, filaCorteSeleccionadaIdx, onDataChangeCorteRef);
+      if (filaCorteSeleccionada) {
+        confirmarEliminarAsignaciones(corte, filaCorteSeleccionada.componenteIdx, filaCorteSeleccionada.tareaIdx, onDataChangeCorteRef);
       }
     });
   }
@@ -399,16 +460,19 @@ function ocultarFABsCorte() {
 
 function calcularProgreso(corte) {
   if (corte.estado === "terminado") return 100;
-  if (!corte.tareas || corte.tareas.length === 0) return 0;
+  var componentes = corte.componentes || [];
+  if (componentes.length === 0) return 0;
   let total = 0;
   let completado = 0;
-  corte.tareas.forEach(function (t) {
-    total += t.unidadesTotales || 0;
-    if (t.asignaciones) {
-      t.asignaciones.forEach(function (a) {
-        completado += a.cantidad || 0;
-      });
-    }
+  componentes.forEach(function (comp) {
+    (comp.tareas || []).forEach(function (t) {
+      total += t.unidadesTotales || 0;
+      if (t.asignaciones) {
+        t.asignaciones.forEach(function (a) {
+          completado += a.cantidad || 0;
+        });
+      }
+    });
   });
   if (total === 0) return 0;
   return Math.round((completado / total) * 100);

@@ -2,6 +2,7 @@
 // ASIGNACION COMPARTIDA - Funciones reutilizadas por varios tabs
 // Contiene la logica de asignacion y eliminacion de asignaciones
 // para evitar duplicacion entre tab-editar.js y tab-corte.js.
+// Las tareas se direccionan con doble indice {componenteIdx, tareaIdx}.
 // ============================================================
 
 import { db } from "../../db.js";
@@ -20,13 +21,13 @@ import { mostrarModalConfirmar, mostrarToast } from "../shared.js";
  * @returns {Object} - Mapa { nombreTalla: cantidadDisponible }
  */
 export function getTallasDisponiblesParaTarea(corte, tarea) {
-  let asignadas = {};
+  var asignadas = {};
   (tarea.asignaciones || []).forEach(function (a) {
     if (a.talla) {
       asignadas[a.talla] = (asignadas[a.talla] || 0) + (a.cantidad || 0);
     }
   });
-  let disponibles = {};
+  var disponibles = {};
   (corte.tallas || []).forEach(function (t) {
     disponibles[t.talla] = Math.max(0, t.cantidad - (asignadas[t.talla] || 0));
   });
@@ -42,19 +43,21 @@ export function getTallasDisponiblesParaTarea(corte, tarea) {
  * Muestra select de trabajador, precio editable, y grid de tallas
  * con toggle (0/max) para asignar cantidades por talla.
  * @param {Object} corte - Corte actual
- * @param {number} idx - Indice de la tarea en corte.tareas
+ * @param {number} componenteIdx - Indice del componente en corte.componentes
+ * @param {number} tareaIdx - Indice de la tarea dentro del componente
  * @param {Function} onDataChange - Callback tras guardar
  * @param {Object} trabajadoresMap - Mapa id -> nombre de trabajadores
  */
-export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap) {
-  const tarea = (corte.tareas || [])[idx];
+export function abrirModalAsignarTarea(corte, componenteIdx, tareaIdx, onDataChange, trabajadoresMap) {
+  var comp = (corte.componentes || [])[componenteIdx];
+  var tarea = comp ? (comp.tareas || [])[tareaIdx] : null;
   if (!tarea) return;
 
-  const tieneTallas = corte.tallas && corte.tallas.length > 0;
-  const disponibles = tieneTallas ? getTallasDisponiblesParaTarea(corte, tarea) : {};
+  var tieneTallas = corte.tallas && corte.tallas.length > 0;
+  var disponibles = tieneTallas ? getTallasDisponiblesParaTarea(corte, tarea) : {};
 
   if (tieneTallas) {
-    const algunaDisponible = Object.keys(disponibles).some(function (t) {
+    var algunaDisponible = Object.keys(disponibles).some(function (t) {
       return disponibles[t] > 0;
     });
     if (!algunaDisponible) {
@@ -63,7 +66,7 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
     }
   }
 
-  const opcionesTrabajadores =
+  var opcionesTrabajadores =
     '<option value="">Seleccionar trabajador...</option>' +
     Object.entries(trabajadoresMap)
       .map(function (entry) {
@@ -71,15 +74,15 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
       })
       .join("");
 
-  let tallasHTML = "";
+  var tallasHTML = "";
   if (tieneTallas) {
-    const tallasVisibles = (corte.tallas || []).filter(function (t) {
+    var tallasVisibles = (corte.tallas || []).filter(function (t) {
       return (disponibles[t.talla] || 0) > 0;
     });
-    const sumaDisp = tallasVisibles.reduce(function (s, t) {
+    var sumaDisp = tallasVisibles.reduce(function (s, t) {
       return s + (disponibles[t.talla] || 0);
     }, 0);
-    const totalCtv = sumaDisp * (tarea.precioUnitario || 0);
+    var totalCtv = sumaDisp * (tarea.precioUnitario || 0);
 
     tallasHTML =
       '<label class="form-label" id="at-compartido-asignar-contador">Tallas: ' +
@@ -87,8 +90,8 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
       " | Total: " + formatBsCtv(totalCtv) + "</label>" +
       '<div class="at-asignar__tallas-grid">' +
       tallasVisibles.map(function (t) {
-        const nombreEscapado = escaparHTML(t.talla);
-        const disp = disponibles[t.talla] || 0;
+        var nombreEscapado = escaparHTML(t.talla);
+        var disp = disponibles[t.talla] || 0;
         return (
           '<div class="at-asignar__talla-fila">' +
           '<button type="button" class="at-asignar__talla-label" data-talla="' + nombreEscapado +
@@ -110,7 +113,7 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
       "</div>";
   }
 
-  const overlay = document.createElement("div");
+  var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
@@ -142,22 +145,22 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
   document.body.appendChild(overlay);
   document.body.style.overflow = "hidden";
 
-  const precioInput = overlay.querySelector("#input-compartido-asignar-precio");
-  const selectTrabajador = overlay.querySelector("#select-compartido-asignar-trabajador");
-  const errorEl = overlay.querySelector("#error-compartido-asignar");
+  var precioInput = overlay.querySelector("#input-compartido-asignar-precio");
+  var selectTrabajador = overlay.querySelector("#select-compartido-asignar-trabajador");
+  var errorEl = overlay.querySelector("#error-compartido-asignar");
 
   requestAnimationFrame(function () { selectTrabajador.focus(); });
 
   function configurarToggleLocal() {
-    const labels = overlay.querySelectorAll(".at-asignar__talla-label");
+    var labels = overlay.querySelectorAll(".at-asignar__talla-label");
     labels.forEach(function (label) {
       label.addEventListener("click", function () {
-        const max = parseInt(label.dataset.max, 10) || 0;
-        const tallaNombre = label.dataset.talla;
-        const inputId = "input-compartido-asignar-talla-" + tallaNombre.replace(/\s+/g, "-");
-        const input = overlay.querySelector("#" + inputId);
+        var max = parseInt(label.dataset.max, 10) || 0;
+        var tallaNombre = label.dataset.talla;
+        var inputId = "input-compartido-asignar-talla-" + tallaNombre.replace(/\s+/g, "-");
+        var input = overlay.querySelector("#" + inputId);
         if (!input) return;
-        const currentVal = parseInt(input.value, 10) || 0;
+        var currentVal = parseInt(input.value, 10) || 0;
         if (currentVal === 0 && max > 0) {
           input.value = max;
           label.classList.add("at-asignar__talla-label--filled");
@@ -169,14 +172,14 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
       });
     });
 
-    const inputs = overlay.querySelectorAll(".at-asignar__talla-input");
+    var inputs = overlay.querySelectorAll(".at-asignar__talla-input");
     inputs.forEach(function (input) {
       input.addEventListener("input", function () {
-        const tallaNombre = this.id.replace("input-compartido-asignar-talla-", "").replace(/-/g, " ");
-        const labelBtn = overlay.querySelector('.at-asignar__talla-label[data-talla="' + tallaNombre + '"]');
+        var tallaNombre = this.id.replace("input-compartido-asignar-talla-", "").replace(/-/g, " ");
+        var labelBtn = overlay.querySelector('.at-asignar__talla-label[data-talla="' + tallaNombre + '"]');
         if (labelBtn) {
-          const val = parseInt(this.value, 10) || 0;
-          const max = parseInt(labelBtn.dataset.max, 10) || 0;
+          var val = parseInt(this.value, 10) || 0;
+          var max = parseInt(labelBtn.dataset.max, 10) || 0;
           if (val > max && max > 0) {
             mostrarToast("La cantidad excede el maximo disponible (" + max + ")", "warning");
             this.value = 0;
@@ -193,17 +196,17 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
   }
 
   function actualizarContadorLocal() {
-    const label = overlay.querySelector("#at-compartido-asignar-contador");
+    var label = overlay.querySelector("#at-compartido-asignar-contador");
     if (!label) return;
-    const inputs = overlay.querySelectorAll(".at-asignar__talla-input");
-    let numTallas = 0;
-    let suma = 0;
+    var inputs = overlay.querySelectorAll(".at-asignar__talla-input");
+    var numTallas = 0;
+    var suma = 0;
     inputs.forEach(function (input) {
-      const val = parseInt(input.value, 10) || 0;
+      var val = parseInt(input.value, 10) || 0;
       if (val > 0) { numTallas++; suma += val; }
     });
-    const precio = parseInt(precioInput.value, 10) || 0;
-    const totalCtv = suma * precio;
+    var precio = parseInt(precioInput.value, 10) || 0;
+    var totalCtv = suma * precio;
     label.textContent = "Tallas: " + numTallas + " | Cantidad: " + suma + " | Total: " + formatBsCtv(totalCtv);
   }
 
@@ -213,7 +216,7 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
     configurarToggleLocal();
   }
 
-  const cerrar = function () {
+  var cerrar = function () {
     overlay.classList.add("closing");
     setTimeout(function () {
       overlay.remove();
@@ -221,10 +224,10 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
     }, 250);
   };
 
-  const asignar = async function () {
-    const trabajadorId = selectTrabajador.value ? parseInt(selectTrabajador.value, 10) : null;
-    const precio = parseInt(precioInput.value, 10) || 0;
-    const fecha = new Date().toISOString();
+  var asignar = async function () {
+    var trabajadorId = selectTrabajador.value ? parseInt(selectTrabajador.value, 10) : null;
+    var precio = parseInt(precioInput.value, 10) || 0;
+    var fecha = new Date().toISOString();
 
     errorEl.hidden = true;
 
@@ -235,13 +238,13 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
       return;
     }
 
-    let nuevasAsignaciones = [];
+    var nuevasAsignaciones = [];
 
     if (tieneTallas) {
       (corte.tallas || []).forEach(function (talla) {
-        const inputId = "input-compartido-asignar-talla-" + talla.talla.replace(/\s+/g, "-");
-        const input = overlay.querySelector("#" + inputId);
-        const cantidad = input ? parseInt(input.value, 10) || 0 : 0;
+        var inputId = "input-compartido-asignar-talla-" + talla.talla.replace(/\s+/g, "-");
+        var input = overlay.querySelector("#" + inputId);
+        var cantidad = input ? parseInt(input.value, 10) || 0 : 0;
         if (cantidad > 0) {
           nuevasAsignaciones.push({
             trabajadorId: trabajadorId,
@@ -257,8 +260,8 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
         return;
       }
     } else {
-      const inputCantidad = overlay.querySelector("#input-compartido-asignar-cantidad-global");
-      const cantidad = inputCantidad ? parseInt(inputCantidad.value, 10) || 0 : 0;
+      var inputCantidad = overlay.querySelector("#input-compartido-asignar-cantidad-global");
+      var cantidad = inputCantidad ? parseInt(inputCantidad.value, 10) || 0 : 0;
       if (!cantidad || cantidad < 1) {
         errorEl.textContent = "Ingresa una cantidad valida";
         errorEl.hidden = false;
@@ -274,16 +277,23 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
     }
 
     try {
-      const tareasActualizadas = (corte.tareas || []).map(function (t, i) {
-        if (i === idx) {
-          return Object.assign({}, t, {
-            precioUnitario: precio,
-            asignaciones: (t.asignaciones || []).concat(nuevasAsignaciones),
+      var componentesActualizados = (corte.componentes || []).map(function (comp, ci) {
+        if (ci === componenteIdx) {
+          return Object.assign({}, comp, {
+            tareas: (comp.tareas || []).map(function (t, ti) {
+              if (ti === tareaIdx) {
+                return Object.assign({}, t, {
+                  precioUnitario: precio,
+                  asignaciones: (t.asignaciones || []).concat(nuevasAsignaciones),
+                });
+              }
+              return t;
+            })
           });
         }
-        return t;
+        return comp;
       });
-      await db.cortes.update(corte.id, { tareas: tareasActualizadas });
+      await db.cortes.update(corte.id, { componentes: componentesActualizados });
       cerrar();
       mostrarToast("Asignacion guardada", "success");
       if (onDataChange) await onDataChange();
@@ -299,7 +309,7 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
     if (e.target === overlay) cerrar();
   });
 
-  const escHandler = function (e) {
+  var escHandler = function (e) {
     if (e.key === "Escape") {
       cerrar();
       document.removeEventListener("keydown", escHandler);
@@ -315,14 +325,16 @@ export function abrirModalAsignarTarea(corte, idx, onDataChange, trabajadoresMap
 /**
  * Confirma y elimina todas las asignaciones de una tarea.
  * @param {Object} corte - Corte actual
- * @param {number} idx - Indice de la tarea en corte.tareas
+ * @param {number} componenteIdx - Indice del componente en corte.componentes
+ * @param {number} tareaIdx - Indice de la tarea dentro del componente
  * @param {Function} onDataChange - Callback tras eliminar
  */
-export function confirmarEliminarAsignaciones(corte, idx, onDataChange) {
-  const tarea = (corte.tareas || [])[idx];
+export function confirmarEliminarAsignaciones(corte, componenteIdx, tareaIdx, onDataChange) {
+  var comp = (corte.componentes || [])[componenteIdx];
+  var tarea = comp ? (comp.tareas || [])[tareaIdx] : null;
   if (!tarea) return;
 
-  const totalAsignado = (tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
+  var totalAsignado = (tarea.asignaciones || []).reduce(function (s, a) { return s + (a.cantidad || 0); }, 0);
   if (totalAsignado === 0) {
     mostrarToast("La tarea no tiene asignaciones", "warning");
     return;
@@ -334,13 +346,20 @@ export function confirmarEliminarAsignaciones(corte, idx, onDataChange) {
     "danger",
     async function () {
       try {
-        const tareasActualizadas = (corte.tareas || []).map(function (t, i) {
-          if (i === idx) {
-            return Object.assign({}, t, { asignaciones: [] });
+        var componentesActualizados = (corte.componentes || []).map(function (comp, ci) {
+          if (ci === componenteIdx) {
+            return Object.assign({}, comp, {
+              tareas: (comp.tareas || []).map(function (t, ti) {
+                if (ti === tareaIdx) {
+                  return Object.assign({}, t, { asignaciones: [] });
+                }
+                return t;
+              })
+            });
           }
-          return t;
+          return comp;
         });
-        await db.cortes.update(corte.id, { tareas: tareasActualizadas });
+        await db.cortes.update(corte.id, { componentes: componentesActualizados });
         mostrarToast("Asignaciones eliminadas", "success");
         if (onDataChange) await onDataChange();
       } catch (err) {

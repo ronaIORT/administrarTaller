@@ -251,6 +251,7 @@ function renderTabActivo() {
 
   // Limpiar FABs flotantes de tabs anteriores
   document.getElementById("at-editar-fab-container")?.remove();
+  document.getElementById("at-corte-fab-container")?.remove();
   document.getElementById("at-asignar-fab-container")?.remove();
 
   switch (tabActivo) {
