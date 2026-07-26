@@ -485,6 +485,16 @@
 
 #componente-filter-chips {
   margin-top: var(--space-2);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+@media (max-width: 480px) {
+  #componente-filter-chips {
+    justify-content: flex-start;
+  }
 }
 
 .filter-chip--sm {

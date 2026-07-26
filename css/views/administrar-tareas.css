@@ -575,6 +575,15 @@
 
 /* Reutiliza .filter-chips de gestion-cortes.css */
 
+@media (max-width: 480px) {
+  #corte-componente-filter-chips,
+  #editar-componente-filter-chips,
+  #filter-chips-editar,
+  #asignar-componente-filter-chips {
+    justify-content: flex-start;
+  }
+}
+
 /* Boton Actualizar Prenda */
 .at-editar__acciones {
   display: flex;

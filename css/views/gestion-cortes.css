@@ -45,13 +45,21 @@
 .filter-chips {
     display: flex;
     gap: var(--space-1);
-    /*overflow-x: auto;*/
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     -ms-overflow-style: none;
     padding-bottom: 2px;
     flex-shrink: 0;
     justify-content: center;
     flex: 1;
+    scroll-padding-left: var(--space-2);
+}
+
+@media (max-width: 480px) {
+    .filter-chips {
+        justify-content: flex-start;
+    }
 }
 
 .filter-chips::-webkit-scrollbar {
