@@ -470,7 +470,7 @@ function modoExistente(corte, tarea, trabajadorId) {
   var grupoPrecio = document.getElementById("grupo-precio-asignar");
   var inputPrecio = document.getElementById("input-asignar-precio");
   grupoPrecio.style.display = "";
-  inputPrecio.value = tarea.precioUnitario || 0;
+  inputPrecio.value = tarea.precioUnitario || "";
   precioActualCtv = tarea.precioUnitario || 0;
 
   var tallasContainer = document.getElementById("asignar-tallas-container");
@@ -1040,6 +1040,8 @@ async function procesarAsignacion(corte, onDataChange) {
   var fecha = new Date().toISOString();
   var componentesActualizados;
 
+  var inputPrecio = document.getElementById("input-asignar-precio");
+
   if (esCrear) {
     // ---- MODO CREAR NUEVA TAREA ----
 
@@ -1074,7 +1076,6 @@ async function procesarAsignacion(corte, onDataChange) {
     }
 
     // Validar precio
-    var inputPrecio = document.getElementById("input-asignar-precio");
     var precio = inputPrecio ? parseInt(inputPrecio.value, 10) || 0 : 0;
 
     if (precio <= 0) {

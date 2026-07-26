@@ -131,7 +131,7 @@ export function abrirModalAsignarTarea(corte, componenteIdx, tareaIdx, onDataCha
     "</div>" +
     '<div class="form-group">' +
     '<label for="input-compartido-asignar-precio" class="form-label">Precio Unitario (centavos)</label>' +
-    '<input type="number" id="input-compartido-asignar-precio" class="form-input" value="' + (tarea.precioUnitario || 0) + '" min="0" max="9999" step="1" autocomplete="off" />' +
+    '<input type="number" id="input-compartido-asignar-precio" class="form-input" value="' + (tarea.precioUnitario || "") + '" min="0" max="9999" step="1" autocomplete="off" />' +
     "</div>" +
     '<div id="compartido-asignar-tallas-container">' + tallasHTML + "</div>" +
     '<p id="error-compartido-asignar" class="form-error" hidden></p>' +

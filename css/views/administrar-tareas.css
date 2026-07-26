@@ -566,13 +566,6 @@
   font-weight: var(--font-weight-semibold);
 }
 
-.at-editar__costo-componente {
-  display: block;
-  font-size: var(--font-size-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--space-1);
-}
-
 /* Reutiliza .filter-chips de gestion-cortes.css */
 
 #corte-componente-filter-chips,

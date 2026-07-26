@@ -132,21 +132,6 @@ function aplicarFiltroComponenteEditar(tareasConMeta) {
   });
 }
 
-/** Actualiza el costo por componente en el header */
-function actualizarCostoComponenteEditar(tareasConMeta) {
-  var label = document.getElementById("editar-costo-componente");
-  if (!label) return;
-  if (componenteFiltroActivo === "__todas" || !tareasConMeta || tareasConMeta.length === 0) {
-    label.style.display = "none";
-    return;
-  }
-  var costo = tareasConMeta.reduce(function (s, item) {
-    return s + ((item.tarea.precioUnitario || 0));
-  }, 0);
-  label.style.display = "inline";
-  label.textContent = 'Costo (' + componenteFiltroActivo + '): ' + formatCostoTotal(costo);
-}
-
 // ============================================================
 // RENDER PRINCIPAL
 // ============================================================
@@ -201,7 +186,6 @@ export function renderTabEditar(corte, container, opciones) {
     '</div>' +
     '<p id="error-editar-componente" class="form-error" hidden></p>' +
     '<div class="filter-chips" id="editar-componente-filter-chips">' + componenteChipsHTML + '</div>' +
-    '<span id="editar-costo-componente" class="at-editar__costo-componente" style="display:none"></span>' +
     '</div>' +
 
     // Cards de componentes con tareas
@@ -579,9 +563,8 @@ function refrescarCards(corte) {
     costoLabel.textContent = formatCostoTotal(calcularCostoTotal(corte));
   }
 
-  // Refrescar chips de componente y costo por componente
+  // Refrescar chips de componente
   mostrarFiltroComponentesEditar();
-  actualizarCostoComponenteEditar(getTodasLasTareasConMeta(corte));
 }
 
 // ============================================================
@@ -844,17 +827,12 @@ function ocultarFABs() {
 function abrirModalEditarTarea(corte, compIdx, tareaIdx, onDataChange) {
   var tarea = getTarea(corte, compIdx, tareaIdx);
   if (!tarea) return;
-  var compNombre = ((corte.componentes || [])[compIdx] || {}).nombre || COMPONENTE_DEFAULT;
 
   var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "modal-editar-tarea-titulo");
-
-  var compOpts = componentesData.length > 0
-    ? componentesData.map(function (c) { return '<option value="' + escaparHTML(c) + '"' + (c === compNombre ? ' selected' : '') + '>' + escaparHTML(c) + '</option>'; }).join("")
-    : '';
 
   overlay.innerHTML =
     '<div class="modal modal--sm">' +
@@ -867,14 +845,9 @@ function abrirModalEditarTarea(corte, compIdx, tareaIdx, onDataChange) {
     '<label for="input-editar-tarea-nombre" class="form-label">Nombre de la tarea</label>' +
     '<input type="text" id="input-editar-tarea-nombre" class="form-input" value="' + escaparHTML(tarea.nombre || "") + '" maxlength="60" required autocomplete="off" />' +
     '</div>' +
-    (componentesData.length > 0 ?
-    '<div class="form-group">' +
-    '<label for="input-editar-tarea-componente" class="form-label">Componente</label>' +
-    '<select id="input-editar-tarea-componente" class="form-select">' + compOpts + '</select>' +
-    '</div>' : '') +
     '<div class="form-group">' +
     '<label for="input-editar-tarea-precio" class="form-label">Precio (ctv)</label>' +
-    '<input type="number" id="input-editar-tarea-precio" class="form-input" value="' + (tarea.precioUnitario || 0) + '" min="0" max="9999" step="1" autocomplete="off" />' +
+    '<input type="number" id="input-editar-tarea-precio" class="form-input" value="' + (tarea.precioUnitario || "") + '" min="0" max="9999" step="1" autocomplete="off" />' +
     '</div>' +
     '</form>' +
     '</div>' +
@@ -910,9 +883,6 @@ function abrirModalEditarTarea(corte, compIdx, tareaIdx, onDataChange) {
   var guardar = async function () {
     var nuevoNombre = inputNombre.value.trim();
     var nuevoPrecio = parseInt(inputPrecio.value) || 0;
-    var nuevoCompNombre = "";
-    var compSelect = overlay.querySelector("#input-editar-tarea-componente");
-    if (compSelect) nuevoCompNombre = compSelect.value;
 
     if (!nuevoNombre) {
       mostrarToast("El nombre no puede estar vacio", "warning");
@@ -921,29 +891,7 @@ function abrirModalEditarTarea(corte, compIdx, tareaIdx, onDataChange) {
     }
 
     var componentesClon = clonarComponentes(corte);
-
-    // Si cambia de componente, mover la tarea
-    if (nuevoCompNombre && nuevoCompNombre !== compNombre && componentesClon.length > 0) {
-      // Remover del componente original
-      var tareaMovida = componentesClon[compIdx].tareas.splice(tareaIdx, 1)[0];
-      Object.assign(tareaMovida, { nombre: nuevoNombre, precioUnitario: nuevoPrecio });
-
-      // Agregar al nuevo componente
-      var destinoEncontrado = false;
-      for (var i = 0; i < componentesClon.length; i++) {
-        if (componentesClon[i].nombre === nuevoCompNombre) {
-          componentesClon[i].tareas.push(tareaMovida);
-          destinoEncontrado = true;
-          break;
-        }
-      }
-      if (!destinoEncontrado) {
-        componentesClon.push({ nombre: nuevoCompNombre, tareas: [tareaMovida] });
-      }
-    } else {
-      // Mismo componente: solo actualizar datos
-      Object.assign(componentesClon[compIdx].tareas[tareaIdx], { nombre: nuevoNombre, precioUnitario: nuevoPrecio });
-    }
+    Object.assign(componentesClon[compIdx].tareas[tareaIdx], { nombre: nuevoNombre, precioUnitario: nuevoPrecio });
 
     // Limpiar componentes vacios
     var compsFiltrados = componentesClon.filter(function (c) { return c.tareas && c.tareas.length > 0; });
@@ -982,17 +930,11 @@ function abrirModalEditarTarea(corte, compIdx, tareaIdx, onDataChange) {
 // ============================================================
 
 function abrirModalAgregarTarea(corte, compIdx, tareaIdx) {
-  var compNombre = ((corte.componentes || [])[compIdx] || {}).nombre || COMPONENTE_DEFAULT;
-
   var overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.setAttribute("role", "dialog");
   overlay.setAttribute("aria-modal", "true");
   overlay.setAttribute("aria-labelledby", "modal-agregar-tarea-titulo");
-
-  var compOpts = componentesData.length > 0
-    ? '<option value="">Seleccionar componente...</option>' + componentesData.map(function (c) { return '<option value="' + escaparHTML(c) + '"' + (c === compNombre ? ' selected' : '') + '>' + escaparHTML(c) + '</option>'; }).join("")
-    : '';
 
   overlay.innerHTML =
     '<div class="modal modal--sm">' +
@@ -1006,12 +948,6 @@ function abrirModalAgregarTarea(corte, compIdx, tareaIdx) {
     '<input type="text" id="input-agregar-tarea-nombre" class="form-input" placeholder="Ej: Costura, Bordado" maxlength="60" required autocomplete="off" />' +
     '<p id="error-agregar-tarea-nombre" class="form-error" hidden></p>' +
     '</div>' +
-    (componentesData.length > 0 ?
-    '<div class="form-group">' +
-    '<label for="input-agregar-tarea-componente" class="form-label">Componente</label>' +
-    '<select id="input-agregar-tarea-componente" class="form-select">' + compOpts + '</select>' +
-    '<p id="error-agregar-tarea-componente" class="form-error" hidden></p>' +
-    '</div>' : '') +
     '<div class="form-group">' +
     '<label for="input-agregar-tarea-precio" class="form-label">Precio (ctv)</label>' +
     '<input type="number" id="input-agregar-tarea-precio" class="form-input" placeholder="0" min="0" max="9999" step="1" autocomplete="off" />' +
@@ -1090,21 +1026,6 @@ function abrirModalAgregarTarea(corte, compIdx, tareaIdx) {
       return;
     }
 
-    var compSelect = overlay.querySelector("#input-agregar-tarea-componente");
-    var compDestinoNombre = compNombre;
-    if (compSelect) {
-      compDestinoNombre = compSelect.value;
-      if (!compDestinoNombre) {
-        var errorComp = overlay.querySelector("#error-agregar-tarea-componente");
-        if (errorComp) {
-          errorComp.textContent = "Selecciona un componente";
-          errorComp.hidden = false;
-        }
-        compSelect.focus();
-        return;
-      }
-    }
-
     var cantidadPrendas = corte.tallas ? corte.tallas.reduce(function (s, t) { return s + t.cantidad; }, 0) : 0;
     var nuevoId = getNuevoId(corte);
     var nuevaTarea = {
@@ -1116,25 +1037,7 @@ function abrirModalAgregarTarea(corte, compIdx, tareaIdx) {
     };
 
     var componentesClon = clonarComponentes(corte);
-
-    // Determinar donde insertar: en el mismo componente, debajo de tareaIdx
-    if (compDestinoNombre === compNombre) {
-      // Mismo componente: insertar debajo de tareaIdx
-      componentesClon[compIdx].tareas.splice(tareaIdx + 1, 0, nuevaTarea);
-    } else {
-      // Diferente componente: agregar al final de ese componente
-      var encontrado = false;
-      for (var i = 0; i < componentesClon.length; i++) {
-        if (componentesClon[i].nombre === compDestinoNombre) {
-          componentesClon[i].tareas.push(nuevaTarea);
-          encontrado = true;
-          break;
-        }
-      }
-      if (!encontrado) {
-        componentesClon.push({ nombre: compDestinoNombre, tareas: [nuevaTarea] });
-      }
-    }
+    componentesClon[compIdx].tareas.splice(tareaIdx + 1, 0, nuevaTarea);
 
     try {
       await db.cortes.update(corte.id, { componentes: componentesClon });

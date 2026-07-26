@@ -1050,14 +1050,6 @@ export async function renderFormPrenda(id) {
   var filterChips = document.getElementById("componente-filter-chips");
   if (filterChips) {
     filterChips.addEventListener("click", function (e) {
-      // Click en el boton X (eliminar componente)
-      var removeBtn = e.target.closest(".filter-chip__remove");
-      if (removeBtn) {
-        var idx = parseInt(removeBtn.dataset.idx, 10);
-        eliminarComponenteCard(idx);
-        return;
-      }
-
       // Click en chip (filtrar)
       var chip = e.target.closest(".filter-chip");
       if (!chip) return;
@@ -1467,18 +1459,12 @@ function eliminarComponenteCard(idx) {
 }
 
 // ============================================================
-// FILTRO DE COMPONENTES - Chips tipo badge con X para eliminar
-// ============================================================
-
 function renderComponenteFilterChips(componentes, activa) {
   var comps = componentes || [];
   var html = '<button type="button" class="filter-chip filter-chip--sm' + (activa === '__todas' ? ' active' : '') + '" data-componente="__todas">Todos</button>';
   comps.forEach(function (c) {
     html += '<button type="button" class="filter-chip filter-chip--sm' + (c.nombre === activa ? ' active' : '') + '" data-componente="' + escaparHTML(c.nombre) + '">' +
       escaparHTML(c.nombre) +
-      '<span class="filter-chip__remove" data-idx="' + comps.indexOf(c) + '" title="Eliminar ' + escaparHTML(c.nombre) + '">' +
-      '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' +
-      '</span>' +
       '</button>';
   });
   return html;

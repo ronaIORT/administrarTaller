@@ -14,12 +14,10 @@
     flex-wrap: wrap;
 }
 
-/* En movil el buscador ocupa todo el ancho primero (order: -1) */
+/* Buscador: se expande para llenar espacio disponible */
 .cortes-filter-bar .form-input {
     flex: 1;
     min-width: 140px;
-    order: -1;
-    width: 100%;
 }
 
 /* Boton Importar en la barra de filtros */
@@ -28,14 +26,16 @@
     margin-bottom: var(--space-2);
 }
 
-/* En mobile el boton importar se alinea junto al buscador */
+/* Mobile/tablet: buscador + importar en una línea, chips en la segunda */
 @media (max-width: 767px) {
-    .cortes-filter-bar {
-        flex-wrap: wrap;
+    .cortes-filter-bar .form-input {
+        order: -1;
     }
     .cortes-filter-bar #btn-importar-corte {
         order: -1;
-        margin-bottom: var(--space-2);
+    }
+    .cortes-filter-bar .filter-chips {
+        flex-basis: 100%;
     }
 }
 

@@ -4,7 +4,7 @@
 // actualización del service worker en clientes existentes.
 // ============================================================
 
-const CACHE_NAME = "taller-costura-v2.82";
+const CACHE_NAME = "taller-costura-v2.84";
 
 // ============================================================
 // ASSETS LOCALES - Pre-cacheados durante el evento install
