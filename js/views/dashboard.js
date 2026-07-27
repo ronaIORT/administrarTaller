@@ -119,7 +119,7 @@ function calcularIngresosMesCorte(cortes, year, month) {
 function calcularManoObraEstimadaPorPrenda(cortes) {
   var centavos = 0;
   cortes.forEach(function (c) {
-    (c.tareas || []).forEach(function (t) {
+    iterarTareasCorte(c, function (t) {
       (t.asignaciones || []).forEach(function (a) {
         centavos += (a.cantidad || 0) * (t.precioUnitario || 0);
       });
@@ -152,7 +152,7 @@ function calcularTopCortes(cortes, prendasMap, periodo, n) {
     var cantidad = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
     var ingresos = cantidad * (c.precioVentaUnitario || 0);
     var costoCtv = 0;
-    (c.tareas || []).forEach(function (t) {
+    iterarTareasCorte(c, function (t) {
       (t.asignaciones || []).forEach(function (a) {
         costoCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
       });
@@ -213,6 +213,7 @@ function obtenerCortesEnScope(cortes, periodo) {
 function calcularIngresosScope(cortes, periodo) {
   var cortesScope = obtenerCortesEnScope(cortes, periodo);
   return cortesScope.reduce(function (sum, c) {
+    if (c.estado !== "terminado") return sum;
     var cantidad = (c.tallas || []).reduce(function (s, t) { return s + t.cantidad; }, 0);
     return sum + cantidad * (c.precioVentaUnitario || 0);
   }, 0);
@@ -235,7 +236,7 @@ function calcularGastosPeriodo(gastos, periodo) {
 function calcularPorPagarScope(cortesScope, pagos) {
   var manoObraCtv = 0;
   cortesScope.forEach(function (c) {
-    (c.tareas || []).forEach(function (t) {
+    iterarTareasCorte(c, function (t) {
       (t.asignaciones || []).forEach(function (a) {
         manoObraCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
       });
@@ -745,6 +746,7 @@ function renderChartRentabilidad(datos, periodo) {
     });
     var gast = calcularManoObraEstimadaPorPrenda(cortesDePrenda);
 
+    if (ing === 0 && gast === 0) return;
     labels.push(prenda.nombre);
     ingresosData.push(ing);
     costosData.push(gast);
@@ -913,7 +915,7 @@ function renderChartDistCostos(datos, periodo) {
       if (c.prendaId !== prenda.id) return;
       if (c.estado !== "terminado" || !c.fechaFinalizacion) return;
       if (!estaEnPeriodo(c.fechaFinalizacion, periodo)) return;
-      (c.tareas || []).forEach(function (t) {
+      iterarTareasCorte(c, function (t) {
         (t.asignaciones || []).forEach(function (a) {
           costoCtv += (a.cantidad || 0) * (t.precioUnitario || 0);
         });
