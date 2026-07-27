@@ -102,7 +102,7 @@ self.addEventListener("activate", (event) => {
       .then((names) => {
         return Promise.all(
           names
-            .filter((name) => name !== CACHE_NAME)
+            .filter((name) => name.startsWith("taller-costura-v") && name !== CACHE_NAME)
             .map((name) => {
               console.log("[SW] Eliminando cache antiguo:", name);
               return caches.delete(name);
