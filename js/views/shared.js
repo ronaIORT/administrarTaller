@@ -219,6 +219,186 @@ export function crearTabs(tabs, tabActivo, onCambio, swipeElement) {
 }
 
 // ============================================================
+// SWIPE ANIMADO - Drag-follow + transición para tabs
+// El contenido sigue el dedo durante el arrastre horizontal y
+// al soltar: si supera el umbral, el tab actual sale deslizado
+// hacia el lado del gesto y el nuevo entra desde el lado opuesto.
+// Si no lo supera, rebota a su posición original.
+// Respeta prefers-reduced-motion (cambio instantáneo).
+// ============================================================
+
+export function agregarSwipeAnimado(contenido, opciones) {
+  // Limpiar listeners previos para evitar duplicados
+  if (contenido._swipeHandler) {
+    contenido.removeEventListener("touchstart", contenido._swipeHandler.start);
+    contenido.removeEventListener("touchmove", contenido._swipeHandler.move);
+    contenido.removeEventListener("touchend", contenido._swipeHandler.end);
+  }
+
+  // Cancelar animaciones o transforms pendientes de un attach anterior
+  contenido.getAnimations().forEach(function (anim) {
+    anim.cancel();
+  });
+  contenido.style.transform = "";
+  contenido.style.opacity = "";
+
+  const umbral = 50;
+  const factorResistencia = 0.7;
+  const maxDesplazamiento = 120;
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let arrastrando = false;
+  let offsetActual = 0;
+
+  const limpiarTransform = function () {
+    contenido.style.transform = "";
+    contenido.style.opacity = "";
+  };
+
+  // Verifica si el toque inicia dentro de una zona con scroll
+  // horizontal propio (tablas anchas). En ese caso el gesto se
+  // deja para el scroll interno y no para el swipe de tabs.
+  const esScrollableHorizontal = function (el) {
+    while (el && el !== contenido) {
+      if (el.scrollWidth > el.clientWidth + 4) return true;
+      el = el.parentElement;
+    }
+    return false;
+  };
+
+  // Índice destino según el gesto: -1 = tab siguiente (dedo a la
+  // izquierda), +1 = tab anterior (dedo a la derecha).
+  const indiceNuevo = function (dx, dy, indiceActual) {
+    if (Math.abs(dx) <= umbral || Math.abs(dx) <= Math.abs(dy) * 1.5) {
+      return indiceActual;
+    }
+    if (dx < 0 && indiceActual < opciones.getTotalTabs() - 1) {
+      return indiceActual + 1;
+    }
+    if (dx > 0 && indiceActual > 0) {
+      return indiceActual - 1;
+    }
+    return indiceActual;
+  };
+
+  // Rebotar el contenido de vuelta a su posición original
+  const animarRegreso = function () {
+    const anim = contenido.animate(
+      [
+        { transform: "translateX(" + offsetActual + "px)" },
+        { transform: "translateX(0px)" },
+      ],
+      { duration: 240, easing: "cubic-bezier(0.25, 0.9, 0.35, 1.15)" },
+    );
+    anim.onfinish = limpiarTransform;
+  };
+
+  // Sacar el tab actual por el lado del gesto y, al terminar,
+  // renderizar el nuevo con entrada desde el lado opuesto
+  const animarCambio = function (nuevoIndice, dx) {
+    const ancho = contenido.offsetWidth || 1;
+    const exitX = dx < 0 ? -(ancho + 40) : ancho + 40;
+
+    const anim = contenido.animate(
+      [
+        { transform: "translateX(" + offsetActual + "px)", opacity: 1 },
+        { transform: "translateX(" + exitX + "px)", opacity: 0.5 },
+      ],
+      { duration: 160, easing: "ease-in", fill: "forwards" },
+    );
+    anim.onfinish = function () {
+      opciones.onCambio(nuevoIndice);
+      animarEntrada(-exitX);
+    };
+  };
+
+  // Entrada del contenido nuevo desde un lado con slide + fade
+  const animarEntrada = function (desdeX) {
+    contenido.style.transform = "translateX(" + desdeX + "px)";
+    contenido.style.opacity = 0.4;
+    contenido.getBoundingClientRect(); // forzar reflow antes de animar
+
+    const anim = contenido.animate(
+      [
+        { transform: "translateX(" + desdeX + "px)", opacity: 0.4 },
+        { transform: "translateX(0px)", opacity: 1 },
+      ],
+      { duration: 220, easing: "ease-out", fill: "forwards" },
+    );
+    anim.onfinish = limpiarTransform;
+    anim.oncancel = limpiarTransform;
+  };
+
+  const onStart = function (e) {
+    // Abortar animación o arrastre en curso
+    contenido.getAnimations().forEach(function (anim) {
+      anim.cancel();
+    });
+    limpiarTransform();
+    const t = e.touches[0];
+    touchStartX = t.clientX;
+    touchStartY = t.clientY;
+    arrastrando = false;
+    offsetActual = 0;
+  };
+
+  const onMove = function (e) {
+    if (reduceMotion) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchStartX;
+    const dy = t.clientY - touchStartY;
+
+    // Requiere un mínimo de movimiento para arrancar el arrastre
+    if (Math.abs(dx) < 12) return;
+    // Scroll vertical nativo: cancelar arrastre y restaurar posición
+    if (Math.abs(dy) > Math.abs(dx) * 1.5) {
+      arrastrando = false;
+      if (contenido.style.transform) animarRegreso();
+      return;
+    }
+    // No secuestrar gestos dentro de zonas con scroll horizontal propio
+    if (esScrollableHorizontal(e.target)) return;
+
+    arrastrando = true;
+    offsetActual =
+      Math.max(-maxDesplazamiento, Math.min(maxDesplazamiento, dx * factorResistencia));
+    contenido.style.transition = "none";
+    contenido.style.transform = "translateX(" + offsetActual + "px)";
+  };
+
+  const onEnd = function (e) {
+    const dx = e.changedTouches[0].clientX - touchStartX;
+    const dy = e.changedTouches[0].clientY - touchStartY;
+    const indiceActual = opciones.getIndiceActivo();
+
+    if (reduceMotion || !arrastrando) {
+      // Cambio instantáneo (reduced motion o gesto sin arrastre)
+      const idxRapido = indiceNuevo(dx, dy, indiceActual);
+      if (idxRapido !== indiceActual) {
+        opciones.onCambio(idxRapido);
+      }
+      limpiarTransform();
+      return;
+    }
+
+    const nuevoIndice = indiceNuevo(dx, dy, indiceActual);
+    if (nuevoIndice !== indiceActual) {
+      animarCambio(nuevoIndice, dx);
+    } else {
+      animarRegreso();
+    }
+  };
+
+  contenido.addEventListener("touchstart", onStart, { passive: true });
+  contenido.addEventListener("touchmove", onMove, { passive: true });
+  contenido.addEventListener("touchend", onEnd, { passive: true });
+
+  contenido._swipeHandler = { start: onStart, move: onMove, end: onEnd };
+}
+
+// ============================================================
 // HEADER - Barra superior con título y botón volver
 // El botón volver es opcional (rutaVolver=null para páginas principales).
 // ============================================================

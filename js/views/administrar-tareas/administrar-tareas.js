@@ -6,7 +6,12 @@
 // ============================================================
 
 import { db } from "../../db.js";
-import { crearHeader, mostrarToast, estadoVacioHTML } from "../shared.js";
+import {
+  crearHeader,
+  mostrarToast,
+  estadoVacioHTML,
+  agregarSwipeAnimado,
+} from "../shared.js";
 import { renderTabResumen } from "./tab-resumen.js";
 import { renderTabCorte } from "./tab-corte.js";
 import { renderTabTrabajador } from "./tab-trabajador.js";
@@ -167,58 +172,29 @@ function renderTabsButtons() {
 }
 
 // ============================================================
-// SWIPE HORIZONTAL en el area de contenido
-// Umbral 50px, solo si el movimiento horizontal domina.
+// SWIPE HORIZONTAL ANIMADO en el area de contenido
+// Drag-follow: el contenido sigue el dedo y al soltar entra
+// animado el tab nuevo o rebota si no supera el umbral.
 // ============================================================
 
 function agregarSwipeAContenido() {
   if (!tabContentEl) return;
 
-  // Remover listeners previos (evitar duplicados)
-  if (tabContentEl._swipeHandler) {
-    tabContentEl.removeEventListener(
-      "touchstart",
-      tabContentEl._swipeHandler.start,
-    );
-    tabContentEl.removeEventListener(
-      "touchend",
-      tabContentEl._swipeHandler.end,
-    );
-  }
-
-  let touchStartX = 0;
-  let touchStartY = 0;
-
-  const onStart = function (e) {
-    touchStartX = e.touches[0].clientX;
-    touchStartY = e.touches[0].clientY;
-  };
-
-  const onEnd = function (e) {
-    const dx = e.changedTouches[0].clientX - touchStartX;
-    const dy = e.changedTouches[0].clientY - touchStartY;
-
-    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      const currentIdx = TABS.findIndex(function (t) {
+  agregarSwipeAnimado(tabContentEl, {
+    getIndiceActivo: function () {
+      return TABS.findIndex(function (t) {
         return t.id === tabActivo;
       });
-      let newIdx = currentIdx;
-      if (dx < -50 && currentIdx < TABS.length - 1) {
-        newIdx = currentIdx + 1;
-      } else if (dx > 50 && currentIdx > 0) {
-        newIdx = currentIdx - 1;
-      }
-      if (newIdx !== currentIdx) {
-        onCambioTab(TABS[newIdx].id);
-        actualizarTabActivoUI(TABS[newIdx].id);
-      }
-    }
-  };
-
-  tabContentEl.addEventListener("touchstart", onStart, { passive: true });
-  tabContentEl.addEventListener("touchend", onEnd, { passive: true });
-
-  tabContentEl._swipeHandler = { start: onStart, end: onEnd };
+    },
+    getTotalTabs: function () {
+      return TABS.length;
+    },
+    onCambio: function (nuevoIndice) {
+      const tabId = TABS[nuevoIndice].id;
+      onCambioTab(tabId);
+      actualizarTabActivoUI(tabId);
+    },
+  });
 }
 
 // ============================================================

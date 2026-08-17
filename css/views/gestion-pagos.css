@@ -643,6 +643,11 @@
 
 .pagos-tab-content {
   min-height: calc(100vh - var(--header-height) - var(--bottom-nav-height) - 60px);
+  /* Soporte de swipe animado: el contenido se transforma durante
+     el arrastre y necesita fondo propio para no dejar ver la página */
+  background-color: var(--color-bg);
+  will-change: transform;
+  touch-action: pan-y;
 }
 
 /* ----- SIDEBAR (rutas principales) ----- */

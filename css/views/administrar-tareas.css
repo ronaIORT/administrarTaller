@@ -42,6 +42,11 @@
   padding: var(--space-4);
   padding-bottom: calc(var(--space-8) + 40px);
   min-height: 60vh;
+  /* Soporte de swipe animado: el contenido se transforma durante
+     el arrastre y necesita fondo propio para no dejar ver la página */
+  background-color: var(--color-bg);
+  will-change: transform;
+  touch-action: pan-y;
 }
 
 /* =============================================================
