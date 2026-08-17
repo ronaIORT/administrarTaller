@@ -291,7 +291,7 @@ function renderTabActivo(mantenerFiltro) {
         prenda: prendaActual,
         trabajadoresMap: trabajadoresMap,
         onDataChange: recargarCorte,
-      });
+      }, mantenerFiltro);
       break;
     case "asignar":
       renderTabAsignar(corteActual, tabContentEl, {

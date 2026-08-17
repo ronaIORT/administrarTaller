@@ -136,7 +136,7 @@ function aplicarFiltroComponenteEditar(tareasConMeta) {
 // RENDER PRINCIPAL
 // ============================================================
 
-export function renderTabEditar(corte, container, opciones) {
+export function renderTabEditar(corte, container, opciones, mantenerFiltro) {
   const { prenda, onDataChange, trabajadoresMap } = opciones;
   onDataChangeRef = onDataChange;
   trabajadoresMapRef = trabajadoresMap || {};
@@ -144,7 +144,7 @@ export function renderTabEditar(corte, container, opciones) {
   // Limpiar FABs del estado anterior
   document.getElementById(EDIT_FAB_CONTAINER_ID)?.remove();
   filaSeleccionadaIdx = null;
-  filtroActual = "todas";
+  if (!mantenerFiltro) filtroActual = "todas";
   componentesData = (corte.componentes || []).map(function (c) { return c.nombre; });
   if (corte.id !== ultimoCorteIdEditar) {
     componenteFiltroActivo = "__todas";
