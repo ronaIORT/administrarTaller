@@ -244,9 +244,11 @@ function actualizarTabActivoUI(tabId) {
 // ============================================================
 // RENDER DEL TAB ACTIVO - Delega al modulo correspondiente
 // Cada tab recibe: corte, contenedor DOM, y opciones extras.
+// mantenerFiltro conserva el filtro de componente del tab Corte
+// al re-renderizar tras una mutacion.
 // ============================================================
 
-function renderTabActivo() {
+function renderTabActivo(mantenerFiltro) {
   if (!tabContentEl || !corteActual) return;
 
   // Limpiar FABs flotantes de tabs anteriores
@@ -276,7 +278,7 @@ function renderTabActivo() {
           return recargarCorte();
         },
         onDataChange: recargarCorte,
-      });
+      }, mantenerFiltro);
       break;
     case "trabajador":
       renderTabTrabajador(corteActual, tabContentEl, {
@@ -313,7 +315,7 @@ async function recargarCorte() {
     if (corteActual.prendaId) {
       prendaActual = await db.prendas.get(corteActual.prendaId);
     }
-    renderTabActivo();
+    renderTabActivo(true);
   } catch (err) {
     console.error("Error recargando corte:", err);
     mostrarToast("Error al actualizar datos", "error");
